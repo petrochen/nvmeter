@@ -17,6 +17,7 @@ final class DriveDevice: @unchecked Sendable {
     let location: String
     let smartCapable: Bool
     var reader: SMARTReader?
+    var ata: ATAReader?
     var smartError: String?
 
     // Refreshed periodically.
@@ -102,6 +103,11 @@ final class DriveScanner: @unchecked Sendable {
             if let id = r?.identify {
                 if d.serial.isEmpty { d.serial = id.serial }
             }
+        } else if device.bool("SMART Capable") == true {
+            let (a, err) = ATAReader.open(service: device)
+            d.ata = a
+            d.smartError = err
+            if let id = a?.identity, d.serial.isEmpty { d.serial = id.serial }
         } else {
             d.smartError = "No NVMe SMART interface exposed by macOS for this device"
         }

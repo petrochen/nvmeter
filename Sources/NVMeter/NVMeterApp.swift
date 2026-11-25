@@ -26,6 +26,7 @@ struct SettingsView: View {
             Toggle("Hide serial numbers", isOn: $hideSerials)
             Text("Throughput is always sampled every second.").font(.caption).foregroundStyle(.secondary)
             MenuBarSettingsSection()
+            DriveSettingsSection()
             AlertSettingsSection()
         }.formStyle(.grouped).frame(width: 520, height: 700)
     }

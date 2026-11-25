@@ -8,6 +8,7 @@ final class Sampler: @unchecked Sendable {
     private var smart: [UInt64: SMARTSnapshot] = [:]
     private var smartErrors: [UInt64: String] = [:]
     private var lastFull: TimeInterval = -.infinity
+    let extras = SamplerExtras()
 
     /// Seconds between SMART / link / volume refreshes.
     var smartInterval: TimeInterval = 5
@@ -49,9 +50,10 @@ final class Sampler: @unchecked Sendable {
         }
         for k in prev.keys where scanner.devices[k] == nil { prev[k] = nil; rates[k] = nil; smart[k] = nil; smartErrors[k] = nil }
 
-        return scanner.devices.values
+        extras.update(devices: Array(scanner.devices.values), now: now)
+        return extras.annotate(scanner.devices.values
             .sorted { $0.bsdName.localizedStandardCompare($1.bsdName) == .orderedAscending }
-            .map(snapshot)
+            .map(snapshot), devices: scanner.devices)
     }
 
     private func snapshot(_ d: DriveDevice) -> DriveSnapshot {

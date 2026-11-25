@@ -140,6 +140,10 @@ struct DriveSnapshot: Codable, Equatable, Sendable, Identifiable {
     var vendor: Vendor?
     /// Set for USB disks whose reported product is a known USB-NVMe bridge chip, e.g. "Realtek RTL9201R".
     var bridgeChip: String?
+    /// ATA / SATA SMART (see ATA.swift), NVMe self-test log, and the RAID set this disk belongs to (see Extras.swift).
+    var ata: ATASnapshot? = nil
+    var selfTest: NVMeSelfTestLog? = nil
+    var raidSetID: String? = nil
 
     /// USB disk without SMART, or one that only shows its bridge chip: not a real drive model.
     var isUSBOther: Bool { connection.kind == "usb" && (bridgeChip != nil || !smartCapable) }

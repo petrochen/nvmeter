@@ -10,6 +10,7 @@ enum AppTab: String, Hashable { case drives, graphs, events }
 @MainActor @Observable
 final class Monitor {
     var drives: [DriveSnapshot] = []
+    var raidSets: [RAIDSetInfo] = []
     var selection: String?
     var tab: AppTab = .drives
     var lastTick = Date()
@@ -31,8 +32,9 @@ final class Monitor {
             while !Task.isCancelled {
                 let d = UserDefaults.standard.double(forKey: "smartInterval")
                 sampler.smartInterval = d >= 1 ? d : 5
-                let snaps = await Task.detached(priority: .utility) { sampler.tick() }.value
+                let (snaps, sets) = await Task.detached(priority: .utility) { (sampler.tick(), sampler.extras.raidSets) }.value
                 let refreshed = sampler.lastTickRefreshed
+                if sets != self?.raidSets { self?.raidSets = sets }
                 self?.apply(snaps, refreshedSMART: refreshed)
                 try? await Task.sleep(for: .seconds(1))
             }
@@ -47,7 +49,7 @@ final class Monitor {
         for s in snaps {
             rateHistory[s.id, default: []].append(RatePoint(t: now, read: s.throughput.readMBps, write: s.throughput.writeMBps))
             totalR += s.throughput.readMBps; totalW += s.throughput.writeMBps
-            if refreshedSMART, let t = s.smart?.temperatureC {
+            if refreshedSMART, let t = s.temperatureC {
                 tempHistory[s.id, default: []].append(TempPoint(t: now, c: Double(t)))
             }
         }
@@ -57,6 +59,7 @@ final class Monitor {
         for k in tempHistory.keys { Self.trim(&tempHistory[k]!, cutoff: cutoff) { $0.t } }
         if snaps != drives { drives = snaps }
         alerts.evaluate(snaps, now: now)
+        ExtraAlerts.shared.evaluate(snaps, raidSets: raidSets, center: alerts)
         if selection == nil || !snaps.contains(where: { $0.id == selection }) { selection = snaps.first?.id }
     }
 

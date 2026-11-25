@@ -7,10 +7,12 @@ struct DrivesView: View {
 
     var body: some View {
         @Bindable var m = monitor
-        let withSMART = monitor.drives.filter { !$0.isUSBOther }
+        let raidDrives = Set(monitor.raidSets.flatMap(\.memberDrives))
+        let withSMART = monitor.drives.filter { !$0.isUSBOther && !raidDrives.contains($0.bsdName) }
         let others = showNoSMART ? monitor.drives.filter(\.isUSBOther) : []
         NavigationSplitView(columnVisibility: $columns) {
             List(selection: $m.selection) {
+                RAIDSidebarSections(sets: monitor.raidSets, drives: monitor.drives)
                 ForEach(withSMART) { d in DriveRow(drive: d).tag(d.id) }
                 if !others.isEmpty {
                     Section("Other disks (no SMART)") {
@@ -41,7 +43,7 @@ struct DriveRow: View {
             }
             Spacer(minLength: 4)
             VStack(alignment: .trailing, spacing: 3) {
-                if let t = drive.smart?.temperatureC {
+                if let t = drive.temperatureC {
                     Text("\(t) °C").font(.callout.monospacedDigit().weight(.semibold))
                         .foregroundStyle(HealthEvaluator.tempStatus(t, warn: drive.identify?.warningTempC, crit: drive.identify?.criticalTempC).color)
                 } else {
@@ -72,6 +74,7 @@ struct DriveDetail: View {
                 }
                 info
                 if drive.smart != nil { totals }
+                if let log = drive.selfTest { SelfTestCard(log: log) }
                 volumes
                 if !drive.attributes.isEmpty { attributes }
             }
@@ -82,9 +85,9 @@ struct DriveDetail: View {
     private var header: some View {
         HStack(alignment: .top, spacing: 16) {
             HealthTile(title: "Health Status", value: drive.health.title,
-                       subtitle: drive.smart.map { "Wear \($0.percentageUsed) %" } ?? "SMART unavailable",
+                       subtitle: drive.smart.map { "Wear \($0.percentageUsed) %" } ?? drive.ata?.identity.kind ?? "SMART unavailable",
                        color: drive.health.color)
-            let t = drive.smart?.temperatureC
+            let t = drive.temperatureC
             let ts = t.map { HealthEvaluator.tempStatus($0, warn: drive.identify?.warningTempC, crit: drive.identify?.criticalTempC) } ?? .unknown
             HealthTile(title: "Temperature", value: Fmt.temp(t),
                        subtitle: drive.identify?.warningTempC.map { "warn \($0) °C · crit \(drive.identify?.criticalTempC ?? 0) °C" },
@@ -175,7 +178,7 @@ struct DriveDetail: View {
     }
 
     private var attributes: some View {
-        Card("SMART attributes (NVMe health log)") {
+        Card(drive.isATA ? "SMART attributes (ATA)" : "SMART attributes (NVMe health log)") {
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
                 ForEach(drive.attributes) { a in
                     GridRow {

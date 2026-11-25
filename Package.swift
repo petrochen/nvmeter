@@ -18,5 +18,6 @@ let package = Package(
                 .linkedFramework("DiskArbitration"),
             ]
         ),
+        .testTarget(name: "NVMeterTests", dependencies: ["NVMeter"], path: "Tests/NVMeterTests"),
     ]
 )
