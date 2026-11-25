@@ -1,21 +1,37 @@
 # NVMeter
 
-A native macOS app that is "CPU-Z / CrystalDiskInfo for SSDs on Mac, with iStat-style graphs".
-Swift + SwiftUI + Swift Charts, one self-contained `.app`, no runtime dependencies.
-Working name; v0.1.
+A native macOS monitor for NVMe SSDs and the external enclosures they live in: "CrystalDiskInfo for the Mac,
+with iStat-style graphs", built for people who work with lots of external drives (video, photo, archives).
+Swift + SwiftUI + Swift Charts, one self-contained `.app`, no runtime dependencies, no sudo, no kernel extension.
 
-- **Drives tab**: every physical disk with health badge, temperature, model / serial / firmware / capacity,
-  interface (for example `PCIe 4.0 x1 via USB4 40 Gb/s, OWC Express 4M2`), all NVMe SMART attributes with a
-  coloured status dot, total TB written / read, power-on hours and the volumes on the disk (APFS aware).
-- **Graphs tab**: live temperature (with the drive's warning / critical thresholds) and read / write MB/s per
-  drive plus a total row. Windows: 5 min, 30 min, 2 h. History is in memory only (v0.1).
-- SMART is polled every 5 s (Settings, Cmd+,), throughput every 1 s. Disks that appear or disappear are picked
-  up live.
+![icon](docs/icon.png)
 
-## Strictly read-only, no privileges
+- **Drives**: health verdict, temperature with the drive's own warning / critical thresholds, model, serial,
+  firmware, capacity, interface (for example `PCIe 4.0 x1 via USB4 40 Gb/s, OWC Express 4M2`), every NVMe SMART
+  field with a status dot, totals written / read, power-on hours, volumes, NVMe self-test log, vendor logo,
+  custom drive names, and a **Usage & lifetime** section (written per day, lifetime projection, errors added since
+  the drive was first seen).
+- **Enclosures**: drives grouped by connection (internal, each USB4 / Thunderbolt / USB enclosure with its Mac
+  port, other disks), slot numbers, the per-slot PCIe link ("Gen4 x1 of Gen4 x4"), and the enclosure's shared
+  bandwidth budget with live read / write bars and "why is it slow?" hints (enclosure saturated vs slot link limit).
+- **Graphs**: temperature and read / write MB/s per drive and in total, 5 min to 30 days from a local history
+  database, hover crosshair with exact values.
+- **Menu bar** item with the hottest temperature and a drive list; **alerts** for overheating, SMART counters
+  getting worse, a PCIe link or USB4 → USB downgrade, degraded RAID sets; an **Events** log; launch at login.
+- **Reports** (PDF / JSON / Markdown) for warranty claims, resale or forum posts, and SMART **snapshots** with
+  compare.
+- **Speed Test** for media work: quick, sustained write with SLC-cache cliff detection, random 4K, and a verdict
+  per video format (ProRes, ProRes RAW, BRAW, H.265, uncompressed): does the drive keep up, how many streams.
+- **SATA / ATA SMART** for drives behind Thunderbolt / PCIe SATA controllers (without waking sleeping hard
+  drives) and **AppleRAID** set status.
+- Every screen works in light and dark mode; "Hide serial numbers" makes screenshots safe to share.
 
-NVMeter never writes to a disk, needs no sudo, no kernel extension and no helper. It never runs `smartctl`,
-`iostat`, `diskutil` or Python. Everything comes from public macOS APIs:
+## Read-only, no privileges
+
+Apart from the Speed Test (which you start yourself, see below) NVMeter never writes to a disk. It needs no sudo,
+no kernel extension and no helper, and never runs `smartctl`, `iostat`, `diskutil` or Python (the only external
+tool is `lsof`, to show which apps keep a volume busy when it cannot be ejected). Everything comes from public
+macOS APIs:
 
 | What                                                          | Source                                                                                                              |
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
@@ -23,17 +39,20 @@ NVMeter never writes to a disk, needs no sudo, no kernel extension and no helper
 | Throughput                                                    | IORegistry `IOBlockStorageDriver` -> `Statistics`, differenced every second (decimal MB/s)                          |
 | PCIe link                                                     | `IOPCIExpressLinkStatus` / `IOPCIExpressLinkCapabilities` on the NVMe PCI function                                  |
 | Enclosure / USB4 / USB                                        | IORegistry Thunderbolt switch (`Thunderbolt Entry ID` on the bridge above the drive) and `IOUSBHostDevice`          |
+| SATA / ATA SMART                                              | `IOATASMARTInterface` (IOCFPlugIn) on drives behind Thunderbolt / PCIe SATA controllers                            |
+| RAID                                                          | IORegistry `AppleRAIDSet` / `AppleRAIDMember`                                                                       |
 | Volumes                                                       | IORegistry descendants of the whole-disk `IOMedia` + DiskArbitration (APFS physical store -> container -> volumes)  |
 
 If an enclosure falls back to USB, macOS exposes no SMART for the drive. NVMeter still lists the disk with
 throughput and shows a warning such as `Connected at USB 10 Gb/s: SMART unavailable, expect ~1 GB/s`.
 
-### Not pure Swift: one tiny C shim
+### Not pure Swift: small C shims
 
-`Sources/CNVMe` (about 60 lines of C) wraps Apple's COM-style `IONVMeSMARTInterface` vtable from
-`NVMeSMARTLibExternal.h`. Swift cannot import the `CFUUIDGetConstantUUIDWithBytes` macros or call the
-CFPlugIn COM interface cleanly. The shim only opens the plug-in and issues two read-only calls
-(`SMARTReadData`, `GetIdentifyData`); all parsing and all logic is Swift.
+`Sources/CNVMe` (small C files) wraps Apple's COM-style `IONVMeSMARTInterface` and `IOATASMARTInterface` vtables.
+Swift cannot import the `CFUUIDGetConstantUUIDWithBytes` macros or call the CFPlugIn COM interface cleanly. The shim
+only opens the plug-in and issues read-only calls (SMART data, Identify, log pages); all parsing and logic is Swift.
+The SMART client is opened for each read and closed right away: macOS allows only one open client per device, so
+holding it would lock out `smartctl`, DriveDx or a second NVMeter.
 
 ## Build and run
 
@@ -120,23 +139,29 @@ NVMeter is not affiliated with or endorsed by any of them.
 ## Layout
 
 ```
-Sources/NVMeter/Report  drive report (PDF / JSON / Markdown) and snapshots / compare
-Sources/CNVMe      C shim around IONVMeSMARTInterface
-Sources/NVMeter    Swift app: Registry, SMARTReader, DriveScanner, Sampler, Health, Monitor, SwiftUI views
-Resources          Info.plist
+Sources/CNVMe              C shims around IONVMeSMARTInterface / IOATASMARTInterface
+Sources/NVMeter            registry, SMART readers, drive scanner, sampler, health, monitor, main views
+Sources/NVMeter/Enclosure  topology sidebar, enclosure view, bandwidth analysis, eject, volume holders
+Sources/NVMeter/Store      SQLite history, drive keys, trends, recorder
+Sources/NVMeter/MenuBar    menu bar item, popover, events, app lifecycle
+Sources/NVMeter/Alerts     alert rules and notifications
+Sources/NVMeter/Report     PDF / JSON / Markdown reports, snapshots and compare
+Sources/NVMeter/SpeedTest  speed test engine, cliff detector, video format table
+Resources                  Info.plist, app icon, vendor logos
+scripts/make-icon.swift    draws the app icon (make icon)
+Tests                      parser tests (swift test)
 ```
 
-## Known limitations (v0.1)
+## Known limitations
 
-- History is not persisted; it restarts with the app.
-- SMART needs a transparent NVMe path. USB bridges (and some TB/USB4 enclosures in USB mode) hide it.
-- Counters above 64 bit saturate (never happens in practice).
+- SMART needs a transparent NVMe path: USB bridges (and USB4 / Thunderbolt enclosures that fell back to USB) hide it.
+- ATA SMART, RAID detection and the "don't wake sleeping hard drives" logic are implemented from Apple's headers
+  and tested with synthetic data only; they have not met real SATA or RAID hardware yet.
+- Slot numbers come from the enclosure's PCIe switch ports and may not match the labels on the case.
+- The enclosure fan speed is not visible to macOS.
+- Ad-hoc signed: on first launch use right-click > Open, and allow notifications in System Settings.
 - Thunderbolt link speed is derived from the lane adapter's current speed / width; asymmetric 120 Gb/s links
   are shown as 80 Gb/s at most.
-
-## License
-
-MIT
 
 ## Menu bar, alerts, launch at login
 
@@ -157,3 +182,7 @@ Quick (5 GB sequential write and uncached read), Sustained write (SLC cache clif
 `Sources/NVMeter/SpeedTest/VideoFormats.swift`). Test files live in `.nvmeter-speedtest/` and are always deleted,
 stale ones at the next launch. Last results per drive are kept in Application Support.
 CLI: `NVMeter --speedtest <mountpoint> --mode quick|sustained|random [--size GB|free10] [--seconds N]` prints JSON.
+
+## License
+
+MIT
