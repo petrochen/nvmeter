@@ -4,7 +4,7 @@ import Observation
 struct TempPoint: Identifiable, Sendable { let t: Date; let c: Double; var id: Date { t } }
 struct RatePoint: Identifiable, Sendable { let t: Date; let read: Double; let write: Double; var id: Date { t } }
 
-enum AppTab: String, Hashable { case drives, graphs }
+enum AppTab: String, Hashable { case drives, graphs, events }
 
 /// UI-facing state: latest snapshots plus in-memory history (v0.1: not persisted).
 @MainActor @Observable
@@ -13,6 +13,7 @@ final class Monitor {
     var selection: String?
     var tab: AppTab = .drives
     var lastTick = Date()
+    let alerts = AlertCenter.shared
     /// Screenshot mode only: pretend the cursor hovers this many seconds before "now".
     var simulatedHoverAge: TimeInterval?
     private(set) var tempHistory: [String: [TempPoint]] = [:]
@@ -55,6 +56,7 @@ final class Monitor {
         for k in rateHistory.keys { Self.trim(&rateHistory[k]!, cutoff: cutoff) { $0.t } }
         for k in tempHistory.keys { Self.trim(&tempHistory[k]!, cutoff: cutoff) { $0.t } }
         if snaps != drives { drives = snaps }
+        alerts.evaluate(snaps, now: now)
         if selection == nil || !snaps.contains(where: { $0.id == selection }) { selection = snaps.first?.id }
     }
 

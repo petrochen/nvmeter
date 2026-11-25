@@ -40,11 +40,12 @@ enum ScreenshotMode {
             try? await Task.sleep(for: .seconds(2))
             snapshot(to: dir.appendingPathComponent("\(name)-\(suffix).png"))
         }
+        MenuBarShots.render(monitor, dir: dir, suffix: suffix)
         NSApp.terminate(nil)
     }
 
     private static func snapshot(to url: URL) {
-        guard let view = NSApp.windows.first(where: { $0.isVisible })?.contentView?.superview ?? NSApp.windows.first?.contentView,
+        guard let view = NSApp.windows.first(where: { $0.isVisible && $0.title == "NVMeter" })?.contentView?.superview ?? NSApp.windows.first?.contentView,
               let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
         view.cacheDisplay(in: view.bounds, to: rep)
         if let png = rep.representation(using: .png, properties: [:]) { try? png.write(to: url) }

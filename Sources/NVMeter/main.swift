@@ -7,4 +7,12 @@ if CommandLine.arguments.contains("--dump") {
     Dump.run()
     exit(0)
 }
+if CommandLine.arguments.contains("--test-alerts") {
+    TestAlerts.run()
+    exit(0)
+}
+if CommandLine.arguments.contains("--test-login-item") {
+    LoginItem.selfTest()
+    exit(0)
+}
 NVMeterApp.main()

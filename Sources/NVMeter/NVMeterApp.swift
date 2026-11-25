@@ -7,6 +7,7 @@ struct ContentView: View {
         TabView(selection: $m.tab) {
             DrivesView().tabItem { Label("Drives", systemImage: "externaldrive") }.tag(AppTab.drives)
             GraphsView().tabItem { Label("Graphs", systemImage: "chart.xyaxis.line") }.tag(AppTab.graphs)
+            EventsView().tabItem { Label("Events", systemImage: "bell") }.tag(AppTab.events)
         }
         .frame(minWidth: 940, minHeight: 640)
     }
@@ -24,20 +25,30 @@ struct SettingsView: View {
             Toggle("Show disks without SMART", isOn: $showNoSMART)
             Toggle("Hide serial numbers", isOn: $hideSerials)
             Text("Throughput is always sampled every second.").font(.caption).foregroundStyle(.secondary)
-        }.padding(20).frame(width: 360)
+            MenuBarSettingsSection()
+            AlertSettingsSection()
+        }.formStyle(.grouped).frame(width: 520, height: 700)
     }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        !UserDefaults.standard.bool(forKey: AlertKeys.keepRunning)
+    }
 }
 
 struct NVMeterApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var monitor = Monitor()
 
+    init() {
+        AppSettings.registerDefaults()
+        AlertCenter.shared.setUp()
+        AppLifecycle.shared.install()
+    }
+
     var body: some Scene {
-        WindowGroup("NVMeter") {
+        Window("NVMeter", id: "main") {
             ContentView()
                 .environment(monitor)
                 .task {
@@ -47,6 +58,12 @@ struct NVMeterApp: App {
                 }
         }
         .defaultSize(width: 1100, height: 760)
-        Settings { SettingsView() }
+        MenuBarExtra(isInserted: .constant(true)) {
+            MenuPopover().environment(monitor)
+        } label: {
+            MenuBarLabel().environment(monitor)
+        }
+        .menuBarExtraStyle(.window)
+        Settings { SettingsView().environment(monitor) }
     }
 }

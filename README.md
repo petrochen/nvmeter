@@ -93,3 +93,14 @@ Resources          Info.plist
 ## License
 
 MIT
+
+## Menu bar, alerts, launch at login
+
+- A menu bar item shows the hottest drive temperature (optionally total MB/s); the popover lists every drive with
+  link, throughput, a 5 minute sparkline and the latest events. Closing the window keeps the app running in the
+  menu bar (Settings); the Dock icon only exists while a window is open.
+- Alerts (Settings > Alerts, each rule has its own switch): temperature near the drive's warning threshold (offset,
+  3 degree hysteresis, 30 minute cooldown), critical temperature, SMART counters getting worse, PCIe link or USB4
+  fallback downgrades, and drives vanishing with mounted volumes. The last 200 events are on the Events tab.
+- `NVMeter --test-alerts` posts one test notification per rule; `--test-login-item` registers and unregisters the
+  login item and prints the status of each step.
