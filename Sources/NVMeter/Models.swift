@@ -65,6 +65,12 @@ struct ConnectionInfo: Codable, Equatable, Sendable {
     var mode: String?
     var linkGbps: Double?
     var firmware: String?
+    /// Registry id of the enclosure's Thunderbolt switch / USB device; drives sharing it share one link.
+    var enclosureID: UInt64?
+    /// PCIe downstream port number of the enclosure's bridge that this drive sits behind (see Enclosure/).
+    var slotPort: Int?
+    /// Mac-side port, e.g. "Port 3".
+    var hostPort: String?
 }
 
 struct VolumeInfo: Codable, Equatable, Sendable, Identifiable {
@@ -144,11 +150,14 @@ struct DriveSnapshot: Codable, Equatable, Sendable, Identifiable {
     var ata: ATASnapshot? = nil
     var selfTest: NVMeSelfTestLog? = nil
     var raidSetID: String? = nil
+    /// User-chosen name (stored by drive key in the history database).
+    var customName: String?
 
     /// USB disk without SMART, or one that only shows its bridge chip: not a real drive model.
     var isUSBOther: Bool { connection.kind == "usb" && (bridgeChip != nil || !smartCapable) }
 
     var displayName: String {
+        if let n = customName, !n.isEmpty { return n }
         let names = volumes.filter { !$0.name.isEmpty }.map(\.name)
         if !names.isEmpty { return names.joined(separator: ", ") }
         return isUSBOther ? "USB drive" : model

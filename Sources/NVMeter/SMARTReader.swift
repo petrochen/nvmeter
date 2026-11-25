@@ -16,12 +16,15 @@ struct RawBuffer {
     }
 }
 
-/// Owns the IOCFPlugIn SMART interface of one NVMe device.
+/// Reads SMART / Identify of one NVMe device.
+///
+/// The IOCFPlugIn SMART user client is opened for each read and closed right after: macOS allows
+/// only one open client per device, so holding it would lock out smartctl, DriveDx and any second
+/// NVMeter instance (they get kIOReturnNoResources, 0xe00002be).
 final class SMARTReader: @unchecked Sendable {
-    private var handle: OpaquePointer?
-    var rawHandle: OpaquePointer? { handle }
     /// Identify Controller OACS (bytes 256-257); bit 4 = Device Self-test.
     private(set) var oacs: UInt16 = 0
+    private let service: RegEntry
     private(set) var identify: IdentifyInfo?
     /// IOReturn of the last failed `readSMART` (0 when it succeeded).
     private(set) var lastError: Int32 = 0
@@ -32,19 +35,34 @@ final class SMARTReader: @unchecked Sendable {
         guard let h = nvmeter_open(service.handle, &err) else {
             return (nil, String(format: "SMART plug-in unavailable (0x%08x)", UInt32(bitPattern: err)))
         }
-        let r = SMARTReader()
-        r.handle = h
+        nvmeter_close(h)
+        let r = SMARTReader(service: service)
         r.identify = r.readIdentify()
         return (r, nil)
     }
 
-    deinit { if let h = handle { nvmeter_close(h) } }
+    private init(service: RegEntry) { self.service = service }
+
+    /// Opens the user client, runs `body`, closes it. Returns the IOReturn of the open on failure.
+    private func withHandle<T>(_ body: (OpaquePointer) -> T) -> (T?, Int32) {
+        var err: Int32 = 0
+        guard let h = nvmeter_open(service.handle, &err) else { return (nil, err) }
+        defer { nvmeter_close(h) }
+        return (body(h), 0)
+    }
+
+    /// Reads a log page (open, read, close). Read-only. nil when the open or the command failed.
+    func readLogPage(_ lid: UInt8, dwords: UInt32) -> [UInt8]? {
+        var buf = [UInt8](repeating: 0, count: 4 * Int(dwords))
+        let (res, _) = withHandle { h in buf.withUnsafeMutableBufferPointer { nvmeter_read_log_page(h, lid, $0.baseAddress, dwords) } }
+        guard let kr = res, kr == 0 else { return nil }
+        return buf
+    }
 
     private func readIdentify() -> IdentifyInfo? {
-        guard let h = handle else { return nil }
         var buf = [UInt8](repeating: 0, count: 4096)
-        let kr = buf.withUnsafeMutableBufferPointer { nvmeter_read_identify(h, $0.baseAddress) }
-        guard kr == 0 else { return nil }
+        let (res, _) = withHandle { h in buf.withUnsafeMutableBufferPointer { nvmeter_read_identify(h, $0.baseAddress) } }
+        guard let kr = res, kr == 0 else { return nil }
         let r = RawBuffer(bytes: buf)
         oacs = r.u16(256)
         // Identify Controller: WCTEMP @266, CCTEMP @268 (Kelvin), VER @80, NN @516.
@@ -59,9 +77,9 @@ final class SMARTReader: @unchecked Sendable {
 
     /// Reads the SMART / Health log page. Read-only.
     func readSMART() -> SMARTSnapshot? {
-        guard let h = handle else { return nil }
         var buf = [UInt8](repeating: 0, count: 512)
-        let kr = buf.withUnsafeMutableBufferPointer { nvmeter_read_smart(h, $0.baseAddress) }
+        let (res, openErr) = withHandle { h in buf.withUnsafeMutableBufferPointer { nvmeter_read_smart(h, $0.baseAddress) } }
+        let kr = res ?? openErr
         lastError = kr
         guard kr == 0 else { return nil }
         let r = RawBuffer(bytes: buf)

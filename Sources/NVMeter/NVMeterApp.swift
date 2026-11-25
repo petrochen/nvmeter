@@ -7,6 +7,7 @@ struct ContentView: View {
         TabView(selection: $m.tab) {
             DrivesView().tabItem { Label("Drives", systemImage: "externaldrive") }.tag(AppTab.drives)
             GraphsView().tabItem { Label("Graphs", systemImage: "chart.xyaxis.line") }.tag(AppTab.graphs)
+            SpeedTestView().tabItem { Label("Speed Test", systemImage: "speedometer") }.tag(AppTab.speed)
             EventsView().tabItem { Label("Events", systemImage: "bell") }.tag(AppTab.events)
         }
         .frame(minWidth: 940, minHeight: 640)
@@ -28,7 +29,8 @@ struct SettingsView: View {
             MenuBarSettingsSection()
             DriveSettingsSection()
             AlertSettingsSection()
-        }.formStyle(.grouped).frame(width: 520, height: 700)
+            HistorySettingsSection()
+        }.formStyle(.grouped).frame(width: 520, height: 760)
     }
 }
 
@@ -36,6 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         !UserDefaults.standard.bool(forKey: AlertKeys.keepRunning)
     }
+    func applicationWillTerminate(_ notification: Notification) { HistoryStore.shared.flush() }
 }
 
 struct NVMeterApp: App {
@@ -46,6 +49,7 @@ struct NVMeterApp: App {
         AppSettings.registerDefaults()
         AlertCenter.shared.setUp()
         AppLifecycle.shared.install()
+        Task.detached(priority: .utility) { SpeedEngine.cleanStale() }
     }
 
     var body: some Scene {
@@ -59,6 +63,7 @@ struct NVMeterApp: App {
                 }
         }
         .defaultSize(width: 1100, height: 760)
+        .commands { ReportCommands() }
         MenuBarExtra(isInserted: .constant(true)) {
             MenuPopover().environment(monitor)
         } label: {

@@ -128,7 +128,17 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
 
     // MARK: Evaluation
 
-    private func key(_ s: DriveSnapshot) -> String { s.serial.isEmpty ? s.id : "\(s.model)|\(s.serial)" }
+    /// The shared drive key (`DriveKey`).
+    private func key(_ s: DriveSnapshot) -> String { s.id }
+
+    /// Older versions keyed baselines by "model|serial"; move them to the shared key once.
+    private func migrateLegacyKey(_ s: DriveSnapshot, _ baselinesChanged: inout Bool, _ tbChanged: inout Bool) {
+        guard !s.serial.isEmpty else { return }
+        let legacy = "\(s.model)|\(s.serial)"
+        guard legacy != s.id else { return }
+        if baselines[s.id] == nil, let v = baselines[legacy] { baselines[s.id] = v; baselines[legacy] = nil; baselinesChanged = true }
+        if tbSeen[s.id] == nil, let v = tbSeen[legacy] { tbSeen[s.id] = v; tbSeen[legacy] = nil; tbChanged = true }
+    }
 
     func evaluate(_ snaps: [DriveSnapshot], now: Date = Date()) {
         guard masterOn else { return }
@@ -136,6 +146,7 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
         let presentKeys = Set(snaps.map(key))
 
         for s in snaps {
+            migrateLegacyKey(s, &baselinesChanged, &tbChanged)
             let k = key(s), name = s.displayName
             lastSeen[k] = (name, s.volumes.contains { !$0.mountPoint.isEmpty })
             missingSince[k] = nil
