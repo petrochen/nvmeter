@@ -4,7 +4,7 @@ import Observation
 struct TempPoint: Identifiable, Sendable { let t: Date; let c: Double; var id: Date { t } }
 struct RatePoint: Identifiable, Sendable { let t: Date; let read: Double; let write: Double; var id: Date { t } }
 
-enum AppTab: String, Hashable { case drives, graphs, events }
+enum AppTab: String, Hashable { case drives, graphs, events, speed }
 
 /// UI-facing state: latest snapshots plus in-memory history (v0.1: not persisted).
 @MainActor @Observable

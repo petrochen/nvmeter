@@ -32,7 +32,9 @@ enum ScreenshotMode {
             (.drives, { $0.connection.kind == "thunderbolt" }, "drives"),
             (.drives, { $0.isUSBOther }, "drives-usb"),
             (.graphs, { _ in true }, "graphs"),
+            (.speed, { _ in true }, "speedtest"),
         ]
+        SpeedHistory.shared.demo = SpeedDemo.results()
         for (tab, pick, name) in shots {
             monitor.tab = tab
             if let d = monitor.drives.first(where: pick) { monitor.selection = d.id }

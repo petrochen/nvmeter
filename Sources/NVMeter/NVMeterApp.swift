@@ -7,6 +7,7 @@ struct ContentView: View {
         TabView(selection: $m.tab) {
             DrivesView().tabItem { Label("Drives", systemImage: "externaldrive") }.tag(AppTab.drives)
             GraphsView().tabItem { Label("Graphs", systemImage: "chart.xyaxis.line") }.tag(AppTab.graphs)
+            SpeedTestView().tabItem { Label("Speed Test", systemImage: "speedometer") }.tag(AppTab.speed)
             EventsView().tabItem { Label("Events", systemImage: "bell") }.tag(AppTab.events)
         }
         .frame(minWidth: 940, minHeight: 640)
@@ -45,6 +46,7 @@ struct NVMeterApp: App {
         AppSettings.registerDefaults()
         AlertCenter.shared.setUp()
         AppLifecycle.shared.install()
+        Task.detached(priority: .utility) { SpeedEngine.cleanStale() }
     }
 
     var body: some Scene {
