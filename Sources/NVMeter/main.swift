@@ -1,7 +1,12 @@
 import Foundation
 
 // --hide-serials masks serial numbers (UI and dump) so output can be shared.
-if CommandLine.arguments.contains("--hide-serials") { UserDefaults.standard.set(true, forKey: "hideSerials") }
+// Held in the volatile argument domain so the flag does not stick in the user's preferences.
+if CommandLine.arguments.contains("--hide-serials") {
+    var args = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
+    args["hideSerials"] = true
+    UserDefaults.standard.setVolatileDomain(args, forName: UserDefaults.argumentDomain)
+}
 
 if StoreCLI.runIfRequested() { exit(0) }
 

@@ -18,6 +18,8 @@ enum Dump {
         let t0 = ProcessInfo.processInfo.systemUptime
         Thread.sleep(forTimeInterval: 2.0)
         var drives = sampler.tick(full: true)
+        let names = HistoryStore.shared.names()
+        for i in drives.indices { drives[i].customName = names[drives[i].id] }
         let keys = Set(drives.map(\.id))
         var history = HistoryStore.shared.stats().drives.filter { keys.contains($0.key) }
         if UserDefaults.standard.bool(forKey: "hideSerials") {

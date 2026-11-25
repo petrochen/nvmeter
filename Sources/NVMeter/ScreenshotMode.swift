@@ -28,6 +28,7 @@ enum ScreenshotMode {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let warmup = Double(value("--warmup") ?? "") ?? 60
         try? await Task.sleep(for: .seconds(warmup))        // let history build up
+        let savedWindow = UserDefaults.standard.object(forKey: "graphWindow")
         if CommandLine.arguments.contains("--seed-demo") {
             DemoSeed.run(drives: monitor.drives.filter { $0.smart != nil }, store: monitor.store)
         }
@@ -37,7 +38,8 @@ enum ScreenshotMode {
             (.graphs, { _ in true }, "graphs"),
             (.graphs, { _ in true }, "graphs-24h"),
             (.graphs, { _ in true }, "graphs-7d"),
-            (.drives, { $0.connection.kind == "thunderbolt" }, "drives-usage"),
+            (.drives, { $0.id == worn(monitor, 0) }, "drives-usage"),          // most worn drive (carries the demo media errors)
+            (.drives, { $0.id == worn(monitor, 1) }, "drives-usage-2"),
         ]
         for (tab, pick, name) in shots {
             monitor.tab = tab
@@ -45,13 +47,19 @@ enum ScreenshotMode {
             if name == "graphs" { UserDefaults.standard.set(300.0, forKey: "graphWindow") }
             if name == "graphs-24h" { UserDefaults.standard.set(86400.0, forKey: "graphWindow") }
             if name == "graphs-7d" { UserDefaults.standard.set(604800.0, forKey: "graphWindow") }
-            if name == "drives-usage" { try? await Task.sleep(for: .seconds(1)); monitor.scrollToUsage = true }
+            if name.hasPrefix("drives-usage") { try? await Task.sleep(for: .seconds(1)); monitor.scrollToUsage = true }
             if let d = monitor.drives.first(where: pick) { monitor.selection = d.id }
             monitor.simulatedHoverAge = tab == .graphs ? 20 : nil
-            try? await Task.sleep(for: .seconds(name.hasPrefix("graphs-") || name == "drives-usage" ? 4 : 2))
+            try? await Task.sleep(for: .seconds(name.hasPrefix("graphs-") || name.hasPrefix("drives-usage") ? 4 : 2))
             snapshot(to: dir.appendingPathComponent("\(name)-\(suffix).png"))
         }
+        UserDefaults.standard.set(savedWindow, forKey: "graphWindow")      // do not leave the user's app on another window
         NSApp.terminate(nil)
+    }
+
+    private static func worn(_ m: Monitor, _ rank: Int) -> String? {
+        let l = m.drives.filter { $0.smart != nil }.sorted { ($0.smart?.percentageUsed ?? 0) > ($1.smart?.percentageUsed ?? 0) }
+        return l.indices.contains(rank) ? l[rank].id : nil
     }
 
     private static func snapshot(to url: URL) {
