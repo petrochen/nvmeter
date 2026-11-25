@@ -148,3 +148,12 @@ MIT
   fallback downgrades, and drives vanishing with mounted volumes. The last 200 events are on the Events tab.
 - `NVMeter --test-alerts` posts one test notification per rule; `--test-login-item` registers and unregisters the
   login item and prints the status of each step.
+
+## Speed Test (the only part that writes)
+
+The Speed Test tab writes a temporary file to a mounted volume you pick (never anything else), measures
+Quick (5 GB sequential write and uncached read), Sustained write (SLC cache cliff detection) and Random 4K
+(QD1 / QD32), and rates the result against common video formats (approximate data rates in
+`Sources/NVMeter/SpeedTest/VideoFormats.swift`). Test files live in `.nvmeter-speedtest/` and are always deleted,
+stale ones at the next launch. Last results per drive are kept in Application Support.
+CLI: `NVMeter --speedtest <mountpoint> --mode quick|sustained|random [--size GB|free10] [--seconds N]` prints JSON.

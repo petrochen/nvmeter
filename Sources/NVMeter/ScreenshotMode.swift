@@ -41,7 +41,9 @@ enum ScreenshotMode {
             (.graphs, { _ in true }, "graphs-7d"),
             (.drives, { $0.id == worn(monitor, 0) }, "drives-usage"),          // most worn drive (carries the demo media errors)
             (.drives, { $0.id == worn(monitor, 1) }, "drives-usage-2"),
+            (.speed, { _ in true }, "speedtest"),
         ]
+        SpeedHistory.shared.demo = SpeedDemo.results()
         for (tab, pick, name) in shots {
             monitor.tab = tab
             monitor.scrollToUsage = false
