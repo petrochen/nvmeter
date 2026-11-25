@@ -15,4 +15,5 @@ if CommandLine.arguments.contains("--test-login-item") {
     LoginItem.selfTest()
     exit(0)
 }
+if let code = ReportCLI.handle(CommandLine.arguments) { exit(code) }
 NVMeterApp.main()
