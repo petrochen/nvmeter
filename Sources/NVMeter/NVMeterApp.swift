@@ -24,12 +24,14 @@ struct SettingsView: View {
             Toggle("Show disks without SMART", isOn: $showNoSMART)
             Toggle("Hide serial numbers", isOn: $hideSerials)
             Text("Throughput is always sampled every second.").font(.caption).foregroundStyle(.secondary)
-        }.padding(20).frame(width: 360)
+            HistorySettingsSection()
+        }.formStyle(.grouped).padding(20).frame(width: 440)
     }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    func applicationWillTerminate(_ notification: Notification) { HistoryStore.shared.flush() }
 }
 
 struct NVMeterApp: App {

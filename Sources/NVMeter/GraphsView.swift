@@ -2,9 +2,11 @@ import SwiftUI
 import Charts
 
 enum GraphWindow: Double, CaseIterable, Identifiable {
-    case m5 = 300, m30 = 1800, h2 = 7200
+    case m5 = 300, m30 = 1800, h2 = 7200, d1 = 86400, d7 = 604800, d30 = 2592000
     var id: Double { rawValue }
-    var title: String { self == .m5 ? "5 min" : (self == .m30 ? "30 min" : "2 h") }
+    var title: String {
+        switch self { case .m5: "5 min"; case .m30: "30 min"; case .h2: "2 h"; case .d1: "24 h"; case .d7: "7 d"; case .d30: "30 d" }
+    }
 }
 
 /// Which chart the cursor is in; only that chart shows the value label, the rule is drawn on both.
@@ -33,11 +35,11 @@ struct GraphsView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Live graphs").font(.title3.weight(.semibold))
+                Text(window.rawValue > Monitor.memoryWindow ? "History" : "Live graphs").font(.title3.weight(.semibold))
                 Spacer()
                 Picker("Window", selection: $windowRaw) {
                     ForEach(GraphWindow.allCases) { Text($0.title).tag($0.rawValue) }
-                }.pickerStyle(.segmented).labelsHidden().frame(width: 220)
+                }.pickerStyle(.segmented).labelsHidden().frame(width: 380)
             }.padding([.horizontal, .top], 16).padding(.bottom, 8)
             ScrollViewReader { sp in
             ScrollView {
@@ -47,6 +49,13 @@ struct GraphsView: View {
                 }.padding(16)
             }
             .onChange(of: monitor.simulatedHoverAge) { sp.scrollTo("top", anchor: .top) }
+            }
+            .task(id: windowRaw) {
+                // Windows beyond 2 h are read from the history store; refresh them every 30 s.
+                while !Task.isCancelled && windowRaw > Monitor.memoryWindow {
+                    await monitor.refreshLong(window: windowRaw)
+                    try? await Task.sleep(for: .seconds(30))
+                }
             }
         }
     }
@@ -129,9 +138,10 @@ private extension View {
 struct HoverLabel: View {
     let v: HoverValues
     private static let f: DateFormatter = { let f = DateFormatter(); f.dateFormat = "HH:mm:ss"; return f }()
+    private static let fLong: DateFormatter = { let f = DateFormatter(); f.dateFormat = "d MMM HH:mm"; return f }()
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(Self.f.string(from: v.time)).fontWeight(.semibold)
+            Text((Date().timeIntervalSince(v.time) > 4 * 3600 ? Self.fLong : Self.f).string(from: v.time)).fontWeight(.semibold)
             if let t = v.tempC { Text("\(v.hottest ? "Hottest" : "Temp") \(Int(t)) °C").foregroundStyle(.red) }
             if let r = v.read { Text("Read \(Fmt.rate(r))").foregroundStyle(.blue) }
             if let w = v.write { Text("Write \(Fmt.rate(w))").foregroundStyle(.orange) }

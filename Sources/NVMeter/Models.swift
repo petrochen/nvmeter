@@ -140,11 +140,14 @@ struct DriveSnapshot: Codable, Equatable, Sendable, Identifiable {
     var vendor: Vendor?
     /// Set for USB disks whose reported product is a known USB-NVMe bridge chip, e.g. "Realtek RTL9201R".
     var bridgeChip: String?
+    /// User-chosen name (stored by drive key in the history database).
+    var customName: String?
 
     /// USB disk without SMART, or one that only shows its bridge chip: not a real drive model.
     var isUSBOther: Bool { connection.kind == "usb" && (bridgeChip != nil || !smartCapable) }
 
     var displayName: String {
+        if let n = customName, !n.isEmpty { return n }
         let names = volumes.filter { !$0.name.isEmpty }.map(\.name)
         if !names.isEmpty { return names.joined(separator: ", ") }
         return isUSBOther ? "USB drive" : model
