@@ -57,6 +57,7 @@ final class Monitor {
         for k in tempHistory.keys { Self.trim(&tempHistory[k]!, cutoff: cutoff) { $0.t } }
         if snaps != drives { drives = snaps }
         alerts.evaluate(snaps, now: now)
+        if refreshedSMART { SnapshotStore.autoSnapshot(snaps) }
         if selection == nil || !snaps.contains(where: { $0.id == selection }) { selection = snaps.first?.id }
     }
 
