@@ -58,6 +58,7 @@ struct NVMeterApp: App {
                 }
         }
         .defaultSize(width: 1100, height: 760)
+        .commands { ReportCommands() }
         MenuBarExtra(isInserted: .constant(true)) {
             MenuPopover().environment(monitor)
         } label: {

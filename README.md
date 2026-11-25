@@ -60,6 +60,40 @@ volumes, a 2 second throughput sample, health rows) and exits. Useful for verifi
 `NVMeter --screenshot <dir> [--appearance dark|light] [--warmup 60]` renders the app window into PNG files
 (with a simulated hover crosshair on the Graphs tab) and quits. Needs no Screen Recording permission.
 
+## Drive reports and snapshots
+
+**Reports** answer "show me the state of this drive": warranty claims, selling a drive, handing media to a client,
+forum posts and issue trackers. Drives tab: toolbar button "Export Report..." (also File > Export Report, Cmd+Shift+E).
+The sheet picks PDF (one A4 or Letter page per drive, with a temperature and a throughput chart), JSON or Markdown,
+and can hide the serial number and the volume names / mount points.
+
+```sh
+NVMeter --report <diskN|all> --format pdf|json|md --out <path> [--hide-serials] [--hide-volumes] [--paper a4|letter]
+```
+
+The CLI takes a short ~6 s live sample for the charts (the app uses its in-memory history of the last 30 min).
+Content: date, app version, Mac model and macOS, drive identity (vendor, model, serial, firmware, capacity, NVMe
+version), connection (interface, link current / max, enclosure and its firmware), health verdict with reasons, every
+SMART field with its status, totals (TB written / read, power-on hours, power cycles, unsafe shutdowns, media and
+error-log counts), temperature thresholds and the volumes.
+
+JSON schema (`schemaVersion` 1): `{schemaVersion, generatedAt (ISO 8601), app{name,version}, machine{model,macOS},
+options{serialsHidden,volumesHidden}, drives[]}`; each drive has `identity`, `connection{kind,interface,link,enclosure}`,
+`health{verdict,reasons[]}`, `smartAvailable`, `warnings[]`, `smartFields[{name,value,status}]`, `counters` (raw numbers),
+`temperature`, `volumes[]` and `charts{windowSeconds,temperature[],throughput[]}`. New fields may be added without a
+version bump; removals or renames bump `schemaVersion`.
+
+**Snapshots** store the full SMART state of a drive as a plain JSON file in
+`~/Library/Application Support/NVMeter/snapshots/<drive-key>/<timestamp>.json` (the drive key is vendor / model plus a
+hash of the serial, raw serials are never written). A snapshot is taken automatically the first time a drive is seen;
+Drives tab > Snapshots > "Save snapshot" adds one, "Compare..." shows two snapshots (or a snapshot against now) with
+before, after, delta and delta per day, worse values in red.
+
+```sh
+NVMeter --snapshot <diskN|all>
+NVMeter --compare <diskN> [<snapshotA> [<snapshotB>]]   # default: latest snapshot vs now; names, unique prefixes or "now"
+```
+
 ## Vendor logos and trademarks
 
 The vendor is identified from the PCI vendor / subsystem vendor ID in the NVMe Identify Controller data,
@@ -77,6 +111,7 @@ NVMeter is not affiliated with or endorsed by any of them.
 ## Layout
 
 ```
+Sources/NVMeter/Report  drive report (PDF / JSON / Markdown) and snapshots / compare
 Sources/CNVMe      C shim around IONVMeSMARTInterface
 Sources/NVMeter    Swift app: Registry, SMARTReader, DriveScanner, Sampler, Health, Monitor, SwiftUI views
 Resources          Info.plist
