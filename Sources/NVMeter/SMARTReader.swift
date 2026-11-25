@@ -50,7 +50,7 @@ final class SMARTReader: @unchecked Sendable {
         return IdentifyInfo(
             model: r.string(24, 40), serial: r.string(4, 20), firmware: r.string(64, 8),
             warningTempC: celsius(r.u16(266)), criticalTempC: celsius(r.u16(268)),
-            nvmeVersion: verStr, namespaces: r.u32(516))
+            nvmeVersion: verStr, pciVendorID: r.u16(0), subsystemVendorID: r.u16(2), namespaces: r.u32(516))
     }
 
     /// Reads the SMART / Health log page. Read-only.

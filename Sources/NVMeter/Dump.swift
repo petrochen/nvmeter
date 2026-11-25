@@ -16,7 +16,14 @@ enum Dump {
         _ = sampler.tick(full: true)
         let t0 = ProcessInfo.processInfo.systemUptime
         Thread.sleep(forTimeInterval: 2.0)
-        let drives = sampler.tick(full: true)
+        var drives = sampler.tick(full: true)
+        if UserDefaults.standard.bool(forKey: "hideSerials") {
+            for i in drives.indices {
+                if !drives[i].serial.isEmpty { drives[i].serial = "XXXXXXXX" }
+                if drives[i].identify != nil { drives[i].identify!.serial = "XXXXXXXX" }
+                drives[i].id = "drive-\(i)"
+            }
+        }
         let dt = ProcessInfo.processInfo.systemUptime - t0
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]

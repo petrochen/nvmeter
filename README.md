@@ -55,8 +55,24 @@ build/NVMeter.app/Contents/MacOS/NVMeter --dump
 prints one JSON document with everything the app knows about every disk (SMART fields, link, connection,
 volumes, a 2 second throughput sample, health rows) and exits. Useful for verification and scripting.
 
-`NVMeter --screenshot <dir>` renders both tabs of the app window into PNG files and quits (used for
-testing; needs no Screen Recording permission).
+`--hide-serials` (also a Settings toggle) masks serial numbers in the UI and the dump, so output can be shared.
+
+`NVMeter --screenshot <dir> [--appearance dark|light] [--warmup 60]` renders the app window into PNG files
+(with a simulated hover crosshair on the Graphs tab) and quits. Needs no Screen Recording permission.
+
+## Vendor logos and trademarks
+
+The vendor is identified from the PCI vendor / subsystem vendor ID in the NVMe Identify Controller data,
+with model-name rules first (Phison-based drives such as Corsair report the controller vendor).
+Logos are monochrome SVGs from [Simple Icons](https://github.com/simple-icons/simple-icons) (CC0, see
+`THIRD_PARTY/simple-icons-LICENSE.md`), bundled in `Resources/Logos` and tinted with the brand colour
+(adjusted for contrast in light / dark mode): Apple, Samsung, Intel, Corsair, Seagate, Toshiba, Kingston.
+Vendors Simple Icons does not have (Western Digital, WD Black, SanDisk, Solidigm, Crucial, Micron, SK hynix,
+Sabrent, ADATA, XPG, Lexar, KIOXIA, TeamGroup, PNY, Hikvision) get a text badge in an approximate brand colour.
+No logos are taken from vendor sites.
+
+Brand names and logos are trademarks of their respective owners and are used only to identify hardware.
+NVMeter is not affiliated with or endorsed by any of them.
 
 ## Layout
 

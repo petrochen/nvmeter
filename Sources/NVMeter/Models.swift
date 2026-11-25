@@ -36,6 +36,8 @@ struct IdentifyInfo: Codable, Equatable, Sendable {
     var warningTempC: Int?
     var criticalTempC: Int?
     var nvmeVersion: String?
+    var pciVendorID: UInt16?
+    var subsystemVendorID: UInt16?
     var namespaces: UInt32
 }
 
@@ -135,9 +137,26 @@ struct DriveSnapshot: Codable, Equatable, Sendable, Identifiable {
     var warnings: [String]
     var health: HealthStatus
     var attributes: [AttributeRow]
+    var vendor: Vendor?
+    /// Set for USB disks whose reported product is a known USB-NVMe bridge chip, e.g. "Realtek RTL9201R".
+    var bridgeChip: String?
+
+    /// USB disk without SMART, or one that only shows its bridge chip: not a real drive model.
+    var isUSBOther: Bool { connection.kind == "usb" && (bridgeChip != nil || !smartCapable) }
 
     var displayName: String {
         let names = volumes.filter { !$0.name.isEmpty }.map(\.name)
-        return names.isEmpty ? model : names.joined(separator: ", ")
+        if !names.isEmpty { return names.joined(separator: ", ") }
+        return isUSBOther ? "USB drive" : model
+    }
+
+    var usbSpeedText: String { connection.linkGbps.map { "USB \(Int($0)) Gb/s" } ?? "USB" }
+
+    var subtitle: String {
+        if isUSBOther {
+            if let b = bridgeChip { return "via \(b) USB bridge · \(usbSpeedText)" }
+            return "\(model) · \(usbSpeedText)"
+        }
+        return "\(model) · \(bsdName)"
     }
 }

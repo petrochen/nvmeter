@@ -2,7 +2,7 @@
 CONFIG ?= release
 APP    := build/NVMeter.app
 
-.PHONY: build app run dump
+.PHONY: build app run dump icon shots
 
 build:
 	swift build -c $(CONFIG)
@@ -12,8 +12,12 @@ app: build
 	mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Resources
 	cp "$$(swift build -c $(CONFIG) --show-bin-path)/NVMeter" $(APP)/Contents/MacOS/NVMeter
 	cp Resources/Info.plist $(APP)/Contents/Info.plist
+	cp Resources/AppIcon.icns $(APP)/Contents/Resources/AppIcon.icns
+	mkdir -p $(APP)/Contents/Resources/Logos
+	cp Resources/Logos/*.svg $(APP)/Contents/Resources/Logos/
 	xattr -cr $(APP)
 	codesign --force --sign - $(APP)
+	touch $(APP)
 	@echo "Built $(APP)"
 
 run: app
@@ -21,3 +25,12 @@ run: app
 
 dump: app
 	$(APP)/Contents/MacOS/NVMeter --dump
+
+# Regenerates Resources/AppIcon.icns and docs/icon.png (the .icns is committed, so building does not need this).
+icon:
+	swift scripts/make-icon.swift
+
+# Light and dark screenshots with a simulated hover crosshair into build/shots (takes ~2 minutes).
+shots: app
+	$(APP)/Contents/MacOS/NVMeter --screenshot build/shots --appearance light
+	$(APP)/Contents/MacOS/NVMeter --screenshot build/shots --appearance dark

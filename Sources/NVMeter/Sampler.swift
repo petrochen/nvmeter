@@ -80,8 +80,12 @@ final class Sampler: @unchecked Sendable {
             identify: ident, smart: s, link: d.link, connection: d.connection, interface: "", volumes: d.volumes,
             counters: d.counters() ?? IOCounters(bytesRead: 0, bytesWritten: 0, opsRead: 0, opsWritten: 0),
             throughput: rates[d.key] ?? Throughput(readMBps: 0, writeMBps: 0, readIOPS: 0, writeIOPS: 0),
-            warnings: warnings, health: health, attributes: rows)
+            warnings: warnings, health: health, attributes: rows,
+            vendor: nil, bridgeChip: d.connection.kind == "usb" ? VendorCatalog.bridgeChip(model: d.model) : nil)
         snap.interface = snap.interfaceDescription
+        if snap.bridgeChip == nil {
+            snap.vendor = VendorCatalog.identify(vid: ident?.pciVendorID, ssvid: ident?.subsystemVendorID, model: snap.model)
+        }
         return snap
     }
 }

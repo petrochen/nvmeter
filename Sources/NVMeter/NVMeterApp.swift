@@ -14,11 +14,15 @@ struct ContentView: View {
 
 struct SettingsView: View {
     @AppStorage("smartInterval") private var interval: Double = 5
+    @AppStorage("showDisksWithoutSMART") private var showNoSMART = true
+    @AppStorage("hideSerials") private var hideSerials = false
     var body: some View {
         Form {
             Picker("SMART poll interval", selection: $interval) {
                 ForEach([2.0, 5, 10, 30, 60], id: \.self) { Text("\(Int($0)) s").tag($0) }
             }
+            Toggle("Show disks without SMART", isOn: $showNoSMART)
+            Toggle("Hide serial numbers", isOn: $hideSerials)
             Text("Throughput is always sampled every second.").font(.caption).foregroundStyle(.secondary)
         }.padding(20).frame(width: 360)
     }
@@ -37,6 +41,7 @@ struct NVMeterApp: App {
             ContentView()
                 .environment(monitor)
                 .task {
+                    ScreenshotMode.applyAppearance()
                     monitor.start()
                     await ScreenshotMode.runIfRequested(monitor)
                 }
