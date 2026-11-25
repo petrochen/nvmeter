@@ -2,14 +2,23 @@ import SwiftUI
 
 struct DrivesView: View {
     @Environment(Monitor.self) private var monitor
+    @AppStorage("showDisksWithoutSMART") private var showNoSMART = true
+    @State private var columns = NavigationSplitViewVisibility.all
 
     var body: some View {
         @Bindable var m = monitor
-        NavigationSplitView {
+        let withSMART = monitor.drives.filter { !$0.isUSBOther }
+        let others = showNoSMART ? monitor.drives.filter(\.isUSBOther) : []
+        NavigationSplitView(columnVisibility: $columns) {
             List(selection: $m.selection) {
-                ForEach(monitor.drives) { d in DriveRow(drive: d).tag(d.id) }
+                ForEach(withSMART) { d in DriveRow(drive: d).tag(d.id) }
+                if !others.isEmpty {
+                    Section("Other disks (no SMART)") {
+                        ForEach(others) { d in DriveRow(drive: d).tag(d.id) }
+                    }
+                }
             }
-            .navigationSplitViewColumnWidth(min: 230, ideal: 260, max: 340)
+            .navigationSplitViewColumnWidth(min: 250, ideal: 290, max: 360)
             .overlay { if monitor.drives.isEmpty { ContentUnavailableView("No disks found", systemImage: "externaldrive.badge.questionmark") } }
         } detail: {
             if let d = monitor.selected {
@@ -25,11 +34,10 @@ struct DriveRow: View {
     let drive: DriveSnapshot
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: drive.location == "Internal" ? "internaldrive" : "externaldrive")
-                .font(.title2).foregroundStyle(.secondary).frame(width: 28)
+            VendorLogo(vendor: drive.vendor, height: 24)
             VStack(alignment: .leading, spacing: 2) {
                 Text(drive.displayName).font(.headline).lineLimit(1)
-                Text("\(drive.model) · \(drive.bsdName)").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(drive.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 4)
             VStack(alignment: .trailing, spacing: 3) {
@@ -51,6 +59,7 @@ struct DriveRow: View {
 
 struct DriveDetail: View {
     let drive: DriveSnapshot
+    @AppStorage("hideSerials") private var hideSerials = false
 
     var body: some View {
         ScrollView {
@@ -81,8 +90,11 @@ struct DriveDetail: View {
                        subtitle: drive.identify?.warningTempC.map { "warn \($0) °C · crit \(drive.identify?.criticalTempC ?? 0) °C" },
                        color: ts.color)
             VStack(alignment: .leading, spacing: 4) {
-                Text(drive.displayName).font(.title2.weight(.semibold))
-                Text(drive.model).foregroundStyle(.secondary)
+                HStack(spacing: 10) {
+                    VendorLogo(vendor: drive.vendor, height: 34)
+                    Text(drive.displayName).font(.title2.weight(.semibold))
+                }
+                Text(drive.isUSBOther ? drive.subtitle : drive.model).foregroundStyle(.secondary)
                 Text("/dev/\(drive.bsdName) · \(Fmt.capacity(drive.capacityBytes))").font(.caption).foregroundStyle(.secondary)
                 HStack(spacing: 14) {
                     Label(Fmt.rate(drive.throughput.readMBps), systemImage: "arrow.down.circle").foregroundStyle(.blue)
@@ -96,8 +108,14 @@ struct DriveDetail: View {
     private var info: some View {
         Card("Drive") {
             Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 5) {
-                row("Model", drive.model)
-                row("Serial", drive.serial.isEmpty ? "-" : drive.serial)
+                if drive.bridgeChip != nil {
+                    row("Model", "drive model unknown (bridge does not pass NVMe identify)")
+                    row("USB bridge", drive.bridgeChip ?? "-")
+                } else {
+                    row("Model", drive.model)
+                    if let v = drive.vendor { row("Vendor", v.name) }
+                }
+                row(drive.bridgeChip != nil ? "Bridge serial" : "Serial", Fmt.serial(drive.serial, hide: hideSerials))
                 row("Firmware", drive.firmware.isEmpty ? "-" : drive.firmware)
                 row("Capacity", Fmt.capacity(drive.capacityBytes))
                 row("Interface", drive.interface)

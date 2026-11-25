@@ -13,6 +13,8 @@ final class Monitor {
     var selection: String?
     var tab: AppTab = .drives
     var lastTick = Date()
+    /// Screenshot mode only: pretend the cursor hovers this many seconds before "now".
+    var simulatedHoverAge: TimeInterval?
     private(set) var tempHistory: [String: [TempPoint]] = [:]
     private(set) var rateHistory: [String: [RatePoint]] = [:]
     private(set) var totalHistory: [RatePoint] = []
@@ -60,6 +62,28 @@ final class Monitor {
         if let first = a.first, time(first) < cutoff, let i = a.firstIndex(where: { time($0) >= cutoff }) { a.removeFirst(i) }
     }
 
+    /// Hover values at time `t` for one drive (nil id = all drives: totals and hottest temperature).
+    func hoverValues(at t: Date, id: String?, window: TimeInterval) -> HoverValues {
+        if let id {
+            let r = Self.nearest(rates(id, window: window), t) { $0.t }
+            let c = Self.nearest(tempHistory[id] ?? [], t, maxGap: 30) { $0.t }
+            return HoverValues(time: r?.t ?? t, tempC: c?.c, read: r?.read, write: r?.write, hottest: false)
+        }
+        let r = Self.nearest(totals(window: window), t) { $0.t }
+        let temps = drives.compactMap { d in Self.nearest(tempHistory[d.id] ?? [], t, maxGap: 30) { $0.t }?.c }
+        return HoverValues(time: r?.t ?? t, tempC: temps.max(), read: r?.read, write: r?.write, hottest: true)
+    }
+
+    /// Nearest element by time in a time-sorted array (binary search).
+    static func nearest<T>(_ a: [T], _ t: Date, maxGap: TimeInterval = .infinity, time: (T) -> Date) -> T? {
+        guard !a.isEmpty else { return nil }
+        var lo = 0, hi = a.count
+        while lo < hi { let mid = (lo + hi) / 2; if time(a[mid]) < t { lo = mid + 1 } else { hi = mid } }
+        let cands = [lo - 1, lo].filter { a.indices.contains($0) }
+        let best = cands.min { abs(time(a[$0]).timeIntervalSince(t)) < abs(time(a[$1]).timeIntervalSince(t)) }!
+        return abs(time(a[best]).timeIntervalSince(t)) <= maxGap ? a[best] : nil
+    }
+
     var selected: DriveSnapshot? { drives.first { $0.id == selection } }
 
     // MARK: Chart helpers
@@ -88,4 +112,12 @@ final class Monitor {
                              read: chunk.reduce(0) { $0 + $1.read } / n, write: chunk.reduce(0) { $0 + $1.write } / n)
         }
     }
+}
+
+struct HoverValues: Sendable {
+    var time: Date
+    var tempC: Double?
+    var read: Double?
+    var write: Double?
+    var hottest: Bool
 }

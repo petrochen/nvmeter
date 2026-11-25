@@ -1,5 +1,8 @@
 import Foundation
 
+// --hide-serials masks serial numbers (UI and dump) so output can be shared.
+if CommandLine.arguments.contains("--hide-serials") { UserDefaults.standard.set(true, forKey: "hideSerials") }
+
 if CommandLine.arguments.contains("--dump") {
     Dump.run()
     exit(0)

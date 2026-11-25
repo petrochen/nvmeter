@@ -29,6 +29,7 @@ enum Fmt {
     static func rate(_ mbps: Double) -> String {
         mbps >= 100 ? String(format: "%.0f MB/s", mbps) : String(format: "%.1f MB/s", mbps)
     }
+    static func serial(_ s: String, hide: Bool) -> String { s.isEmpty ? "-" : (hide ? "XXXXXXXX" : s) }
     static func temp(_ c: Int?) -> String { c.map { "\($0) °C" } ?? "-" }
 }
 
