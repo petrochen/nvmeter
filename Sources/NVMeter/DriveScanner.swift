@@ -146,7 +146,11 @@ final class DriveScanner: @unchecked Sendable {
             var sw: RegEntry? = port
             var hops = 0
             while let s = sw, !s.className.hasPrefix("IOThunderboltSwitch"), hops < 6 { sw = s.parent(); hops += 1 }
-            if let s = sw, s.className.hasPrefix("IOThunderboltSwitch") { return thunderbolt(switch: s) }
+            if let s = sw, s.className.hasPrefix("IOThunderboltSwitch") {
+                var info = thunderbolt(switch: s)
+                EnclosureTopology.annotate(&info, switch: s, ancestors: ancestors)
+                return info
+            }
             return ConnectionInfo(kind: "thunderbolt", summary: "Thunderbolt / USB4")
         }
         if d.interconnect == "USB", let usb = ancestors.first(where: { $0.conforms("IOUSBHostDevice") }) {
@@ -156,8 +160,10 @@ final class DriveScanner: @unchecked Sendable {
             let vendor = usb.string("USB Vendor Name") ?? usb.string("kUSBVendorString")
             let speed = gbps > 0 ? " \(fmtGbps(gbps)) Gb/s" : ""
             let enc = [vendor, name].compactMap { $0 }.joined(separator: " ")
-            return ConnectionInfo(kind: "usb", summary: "USB\(speed)" + (enc.isEmpty ? "" : ", \(enc)"),
-                                  enclosureVendor: vendor, enclosureModel: name, mode: "USB", linkGbps: gbps > 0 ? gbps : nil)
+            var info = ConnectionInfo(kind: "usb", summary: "USB\(speed)" + (enc.isEmpty ? "" : ", \(enc)"),
+                                      enclosureVendor: vendor, enclosureModel: name, mode: "USB", linkGbps: gbps > 0 ? gbps : nil)
+            EnclosureTopology.annotate(&info, usb: usb)
+            return info
         }
         if d.interconnect == "PCI-Express" {
             return ConnectionInfo(kind: "pcie", summary: "PCIe (\(d.location.lowercased()))")
