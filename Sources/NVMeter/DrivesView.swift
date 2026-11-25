@@ -4,51 +4,31 @@ struct DrivesView: View {
     @Environment(Monitor.self) private var monitor
     @AppStorage("showDisksWithoutSMART") private var showNoSMART = true
     @State private var columns = NavigationSplitViewVisibility.all
-    @State private var renaming: DriveSnapshot?
-    @State private var nameDraft = ""
 
     var body: some View {
         @Bindable var m = monitor
-        let withSMART = monitor.drives.filter { !$0.isUSBOther }
-        let others = showNoSMART ? monitor.drives.filter(\.isUSBOther) : []
         NavigationSplitView(columnVisibility: $columns) {
-            List(selection: $m.selection) {
-                ForEach(withSMART) { d in row(d) }
-                if !others.isEmpty {
-                    Section("Other disks (no SMART)") {
-                        ForEach(others) { d in row(d) }
-                    }
-                }
-            }
+            TopologySidebar(selection: $m.selection, showOthers: showNoSMART)
             .navigationSplitViewColumnWidth(min: 250, ideal: 290, max: 360)
             .overlay { if monitor.drives.isEmpty { ContentUnavailableView("No disks found", systemImage: "externaldrive.badge.questionmark") } }
         } detail: {
-            if let d = monitor.selected {
+            if let sel = monitor.selection, sel.hasPrefix(EnclosureTopology.selectionPrefix) {
+                EnclosureDetail(enclosureID: sel).id(sel)
+            } else if let d = monitor.selected {
                 DriveDetail(drive: d).id(d.id)
             } else {
                 ContentUnavailableView("Select a disk", systemImage: "externaldrive")
             }
         }
-        .alert("Rename drive", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
-            TextField("Name", text: $nameDraft)
-            Button("Rename") { if let d = renaming { monitor.rename(d.id, to: nameDraft) }; renaming = nil }
-            Button("Cancel", role: .cancel) { renaming = nil }
-        } message: { Text("Shown instead of the volume name. An empty name restores the default.") }
-    }
-
-    private func row(_ d: DriveSnapshot) -> some View {
-        DriveRow(drive: d).tag(d.id)
-            .contentShape(Rectangle())
-            .simultaneousGesture(TapGesture(count: 2).onEnded { nameDraft = d.customName ?? ""; renaming = d })
-            .contextMenu {
-                Button("Rename…") { nameDraft = d.customName ?? ""; renaming = d }
-                Button("Reset name") { monitor.rename(d.id, to: nil) }.disabled(d.customName == nil)
-            }
+        .reportToolbar()
     }
 }
 
 struct DriveRow: View {
     let drive: DriveSnapshot
+    @Environment(Monitor.self) private var monitor
+    @State private var renaming = false
+    @State private var nameDraft = ""
     var body: some View {
         HStack(spacing: 10) {
             VendorLogo(vendor: drive.vendor, height: 24)
@@ -71,6 +51,17 @@ struct DriveRow: View {
             }
         }
         .padding(.vertical, 3)
+        .contentShape(Rectangle())
+        .simultaneousGesture(TapGesture(count: 2).onEnded { nameDraft = drive.customName ?? ""; renaming = true })
+        .contextMenu {
+            Button("Rename…") { nameDraft = drive.customName ?? ""; renaming = true }
+            Button("Reset name") { monitor.rename(drive.id, to: nil) }.disabled(drive.customName == nil)
+        }
+        .alert("Rename drive", isPresented: $renaming) {
+            TextField("Name", text: $nameDraft)
+            Button("Rename") { monitor.rename(drive.id, to: nameDraft) }
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("Shown instead of the volume name. An empty name restores the default.") }
     }
 }
 
@@ -93,6 +84,7 @@ struct DriveDetail: View {
                 if drive.smart != nil { totals }
                 if drive.smart != nil { UsageSection(drive: drive).id("usage") }
                 volumes
+                EjectControls(drives: [drive], ejectTitle: "Eject", sheetTitle: drive.displayName)
                 if !drive.attributes.isEmpty { attributes }
             }
             .padding(20)
