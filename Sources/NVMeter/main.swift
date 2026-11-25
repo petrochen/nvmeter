@@ -15,4 +15,9 @@ if CommandLine.arguments.contains("--test-login-item") {
     LoginItem.selfTest()
     exit(0)
 }
+if CommandLine.arguments.contains("--speedtest") { SpeedCLI.run() }
+if CommandLine.arguments.contains("--speedtest-selftest") {
+    SpeedCLI.selfTest()
+    exit(0)
+}
 NVMeterApp.main()
