@@ -69,10 +69,8 @@ enum NVMeSelfTestParser {
 extension SMARTReader {
     /// Reads log page 06h when the controller advertises Device Self-test (OACS bit 4). nil otherwise.
     func readSelfTestLog() -> NVMeSelfTestLog? {
-        guard let h = rawHandle, NVMeSelfTestParser.supportsSelfTest(oacs: oacs) else { return nil }
-        var buf = [UInt8](repeating: 0, count: 4 * Int(NVMeSelfTestParser.logDWords))
-        let kr = buf.withUnsafeMutableBufferPointer { nvmeter_read_log_page(h, 0x06, $0.baseAddress, NVMeSelfTestParser.logDWords) }
-        guard kr == 0 else { return nil }
+        guard NVMeSelfTestParser.supportsSelfTest(oacs: oacs),
+              let buf = readLogPage(0x06, dwords: NVMeSelfTestParser.logDWords) else { return nil }
         return NVMeSelfTestParser.parse(buf)
     }
 }

@@ -7,33 +7,28 @@ struct DrivesView: View {
 
     var body: some View {
         @Bindable var m = monitor
-        let raidDrives = Set(monitor.raidSets.flatMap(\.memberDrives))
-        let withSMART = monitor.drives.filter { !$0.isUSBOther && !raidDrives.contains($0.bsdName) }
-        let others = showNoSMART ? monitor.drives.filter(\.isUSBOther) : []
         NavigationSplitView(columnVisibility: $columns) {
-            List(selection: $m.selection) {
-                RAIDSidebarSections(sets: monitor.raidSets, drives: monitor.drives)
-                ForEach(withSMART) { d in DriveRow(drive: d).tag(d.id) }
-                if !others.isEmpty {
-                    Section("Other disks (no SMART)") {
-                        ForEach(others) { d in DriveRow(drive: d).tag(d.id) }
-                    }
-                }
-            }
+            TopologySidebar(selection: $m.selection, showOthers: showNoSMART)
             .navigationSplitViewColumnWidth(min: 250, ideal: 290, max: 360)
             .overlay { if monitor.drives.isEmpty { ContentUnavailableView("No disks found", systemImage: "externaldrive.badge.questionmark") } }
         } detail: {
-            if let d = monitor.selected {
+            if let sel = monitor.selection, sel.hasPrefix(EnclosureTopology.selectionPrefix) {
+                EnclosureDetail(enclosureID: sel).id(sel)
+            } else if let d = monitor.selected {
                 DriveDetail(drive: d).id(d.id)
             } else {
                 ContentUnavailableView("Select a disk", systemImage: "externaldrive")
             }
         }
+        .reportToolbar()
     }
 }
 
 struct DriveRow: View {
     let drive: DriveSnapshot
+    @Environment(Monitor.self) private var monitor
+    @State private var renaming = false
+    @State private var nameDraft = ""
     var body: some View {
         HStack(spacing: 10) {
             VendorLogo(vendor: drive.vendor, height: 24)
@@ -56,14 +51,27 @@ struct DriveRow: View {
             }
         }
         .padding(.vertical, 3)
+        .contentShape(Rectangle())
+        .simultaneousGesture(TapGesture(count: 2).onEnded { nameDraft = drive.customName ?? ""; renaming = true })
+        .contextMenu {
+            Button("Rename…") { nameDraft = drive.customName ?? ""; renaming = true }
+            Button("Reset name") { monitor.rename(drive.id, to: nil) }.disabled(drive.customName == nil)
+        }
+        .alert("Rename drive", isPresented: $renaming) {
+            TextField("Name", text: $nameDraft)
+            Button("Rename") { monitor.rename(drive.id, to: nameDraft) }
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("Shown instead of the volume name. An empty name restores the default.") }
     }
 }
 
 struct DriveDetail: View {
     let drive: DriveSnapshot
+    @Environment(Monitor.self) private var monitor
     @AppStorage("hideSerials") private var hideSerials = false
 
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 header
@@ -74,11 +82,14 @@ struct DriveDetail: View {
                 }
                 info
                 if drive.smart != nil { totals }
-                if let log = drive.selfTest { SelfTestCard(log: log) }
+                if drive.smart != nil { UsageSection(drive: drive).id("usage") }
                 volumes
+                EjectControls(drives: [drive], ejectTitle: "Eject", sheetTitle: drive.displayName)
                 if !drive.attributes.isEmpty { attributes }
             }
             .padding(20)
+        }
+        .onChange(of: monitor.scrollToUsage) { _, v in if v { proxy.scrollTo("usage", anchor: .top) } }
         }
     }
 
@@ -111,6 +122,7 @@ struct DriveDetail: View {
     private var info: some View {
         Card("Drive") {
             Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 5) {
+                DriveNameRow(drive: drive)
                 if drive.bridgeChip != nil {
                     row("Model", "drive model unknown (bridge does not pass NVMe identify)")
                     row("USB bridge", drive.bridgeChip ?? "-")
