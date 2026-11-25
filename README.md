@@ -60,6 +60,15 @@ volumes, a 2 second throughput sample, health rows) and exits. Useful for verifi
 `NVMeter --screenshot <dir> [--appearance dark|light] [--warmup 60]` renders the app window into PNG files
 (with a simulated hover crosshair on the Graphs tab) and quits. Needs no Screen Recording permission.
 
+## History store
+
+Samples and hourly SMART snapshots are kept in `~/Library/Application Support/NVMeter/history.sqlite` (WAL):
+1 s resolution for 2 h, 1 min for 30 days, 1 h for up to 2 years (Settings: keep 30 d / 90 d / 2 y, delete history).
+Drives are keyed by model + serial (registry path for drives without SMART / behind a USB bridge), so history and
+custom names survive reconnects. Hidden CLI modes: `--dump-db-stats`, `--set-name <key> <name>`, `--reset-name <key>`,
+`--record <seconds>` (headless sampling), `--compact`, `--db <file>` (any mode). `--seed-demo` (screenshot mode, needs
+`--db`) fills a throwaway database with synthetic history.
+
 ## Vendor logos and trademarks
 
 The vendor is identified from the PCI vendor / subsystem vendor ID in the NVMe Identify Controller data,
