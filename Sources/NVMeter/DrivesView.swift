@@ -7,21 +7,14 @@ struct DrivesView: View {
 
     var body: some View {
         @Bindable var m = monitor
-        let withSMART = monitor.drives.filter { !$0.isUSBOther }
-        let others = showNoSMART ? monitor.drives.filter(\.isUSBOther) : []
         NavigationSplitView(columnVisibility: $columns) {
-            List(selection: $m.selection) {
-                ForEach(withSMART) { d in DriveRow(drive: d).tag(d.id) }
-                if !others.isEmpty {
-                    Section("Other disks (no SMART)") {
-                        ForEach(others) { d in DriveRow(drive: d).tag(d.id) }
-                    }
-                }
-            }
+            TopologySidebar(selection: $m.selection, showOthers: showNoSMART)
             .navigationSplitViewColumnWidth(min: 250, ideal: 290, max: 360)
             .overlay { if monitor.drives.isEmpty { ContentUnavailableView("No disks found", systemImage: "externaldrive.badge.questionmark") } }
         } detail: {
-            if let d = monitor.selected {
+            if let sel = monitor.selection, sel.hasPrefix(EnclosureTopology.selectionPrefix) {
+                EnclosureDetail(enclosureID: sel).id(sel)
+            } else if let d = monitor.selected {
                 DriveDetail(drive: d).id(d.id)
             } else {
                 ContentUnavailableView("Select a disk", systemImage: "externaldrive")
@@ -74,6 +67,7 @@ struct DriveDetail: View {
                 info
                 if drive.smart != nil { totals }
                 volumes
+                EjectControls(drives: [drive], ejectTitle: "Eject", sheetTitle: drive.displayName)
                 if !drive.attributes.isEmpty { attributes }
             }
             .padding(20)
