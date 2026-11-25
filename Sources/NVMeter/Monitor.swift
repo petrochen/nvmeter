@@ -4,7 +4,7 @@ import Observation
 struct TempPoint: Identifiable, Sendable { let t: Date; let c: Double; var id: Date { t } }
 struct RatePoint: Identifiable, Sendable { let t: Date; let read: Double; let write: Double; var id: Date { t } }
 
-enum AppTab: String, Hashable { case drives, graphs }
+enum AppTab: String, Hashable { case drives, graphs, events }
 
 /// UI-facing state: latest snapshots plus in-memory history (v0.1: not persisted).
 @MainActor @Observable
@@ -13,6 +13,7 @@ final class Monitor {
     var selection: String?
     var tab: AppTab = .drives
     var lastTick = Date()
+    let alerts = AlertCenter.shared
     /// Screenshot mode only: pretend the cursor hovers this many seconds before "now".
     var simulatedHoverAge: TimeInterval?
     /// Screenshot mode only: scroll the drive detail to "Usage & lifetime".
@@ -73,7 +74,10 @@ final class Monitor {
         var snaps = snaps
         for i in snaps.indices { snaps[i].customName = names[snaps[i].id] }
         if snaps != drives { drives = snaps }
-        if selection == nil || !snaps.contains(where: { $0.id == selection }) { selection = snaps.first?.id }
+        alerts.evaluate(snaps, now: now)
+if refreshedSMART { SnapshotStore.autoSnapshot(snaps) }
+        LinkMemory.shared.observe(snaps)
+        if !EnclosureTopology.isValidSelection(selection, drives: snaps) { selection = snaps.first?.id }
     }
 
     private static func trim<T>(_ a: inout [T], cutoff: Date, time: (T) -> Date) {

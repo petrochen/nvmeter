@@ -99,7 +99,7 @@ struct UsageTrends: Sendable {
 
     /// "7-day avg", or "avg over 1.5 d" while there is less history than the window.
     static func avgLabel(_ r: Rate, window: Double) -> String {
-        r.spanDays + 0.05 >= window ? "\(Int(window))-day avg" : String(format: "avg over %.1f d", r.spanDays)
+        r.perDay == nil ? "needs more history" : r.spanDays + 0.05 >= window ? "\(Int(window))-day avg" : String(format: "avg over %.1f d", r.spanDays)
     }
 
     var projectionText: String {
