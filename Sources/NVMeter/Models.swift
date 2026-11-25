@@ -65,6 +65,12 @@ struct ConnectionInfo: Codable, Equatable, Sendable {
     var mode: String?
     var linkGbps: Double?
     var firmware: String?
+    /// Registry id of the enclosure's Thunderbolt switch / USB device; drives sharing it share one link.
+    var enclosureID: UInt64?
+    /// PCIe downstream port number of the enclosure's bridge that this drive sits behind (see Enclosure/).
+    var slotPort: Int?
+    /// Mac-side port, e.g. "Port 3".
+    var hostPort: String?
 }
 
 struct VolumeInfo: Codable, Equatable, Sendable, Identifiable {

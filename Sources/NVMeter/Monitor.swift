@@ -57,8 +57,9 @@ final class Monitor {
         for k in tempHistory.keys { Self.trim(&tempHistory[k]!, cutoff: cutoff) { $0.t } }
         if snaps != drives { drives = snaps }
         alerts.evaluate(snaps, now: now)
-        if refreshedSMART { SnapshotStore.autoSnapshot(snaps) }
-        if selection == nil || !snaps.contains(where: { $0.id == selection }) { selection = snaps.first?.id }
+if refreshedSMART { SnapshotStore.autoSnapshot(snaps) }
+        LinkMemory.shared.observe(snaps)
+        if !EnclosureTopology.isValidSelection(selection, drives: snaps) { selection = snaps.first?.id }
     }
 
     private static func trim<T>(_ a: inout [T], cutoff: Date, time: (T) -> Date) {
