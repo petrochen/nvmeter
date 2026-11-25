@@ -31,11 +31,12 @@ enum ScreenshotMode {
         let shots: [(AppTab, (DriveSnapshot) -> Bool, String)] = [
             (.drives, { $0.connection.kind == "thunderbolt" }, "drives"),
             (.drives, { $0.isUSBOther }, "drives-usb"),
+            (.drives, { $0.connection.kind == "thunderbolt" }, "enclosure"),
             (.graphs, { _ in true }, "graphs"),
         ]
         for (tab, pick, name) in shots {
             monitor.tab = tab
-            if let d = monitor.drives.first(where: pick) { monitor.selection = d.id }
+            if let d = monitor.drives.first(where: pick) { monitor.selection = name == "enclosure" ? EnclosureTopology.selectionID(for: d) : d.id }
             monitor.simulatedHoverAge = tab == .graphs ? 20 : nil
             try? await Task.sleep(for: .seconds(2))
             snapshot(to: dir.appendingPathComponent("\(name)-\(suffix).png"))
