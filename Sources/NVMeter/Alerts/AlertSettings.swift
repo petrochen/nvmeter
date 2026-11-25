@@ -3,7 +3,7 @@ import Foundation
 /// Alert rules. Every rule has its own on/off switch in Settings.
 enum AlertRule: String, CaseIterable, Codable, Sendable, Identifiable {
     case tempWarning, tempCritical, mediaErrors, errorLog, criticalWarning, spareLow, wear
-    case linkDowngrade, usbFallback, driveRemoved
+    case linkDowngrade, usbFallback, driveRemoved, raidDegraded
 
     var id: String { rawValue }
     var key: String { "alert.rule.\(rawValue)" }
@@ -20,6 +20,7 @@ enum AlertRule: String, CaseIterable, Codable, Sendable, Identifiable {
         case .linkDowngrade: "PCIe link slower than before"
         case .usbFallback: "Enclosure fell back from USB4 / Thunderbolt to USB"
         case .driveRemoved: "Drive with mounted volumes disappeared"
+        case .raidDegraded: "RAID set degraded"
         }
     }
 

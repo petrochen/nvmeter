@@ -6,6 +6,7 @@
 
 #include <stdint.h>
 #include <IOKit/IOKitLib.h>
+#include "cata.h"   // ATA shim (separate file; cnvme.h is the umbrella header)
 
 typedef struct nvmeter_handle nvmeter_handle;
 
@@ -18,5 +19,8 @@ void nvmeter_close(nvmeter_handle *h);
 int nvmeter_read_smart(nvmeter_handle *h, uint8_t *buf512);
 // Fills 4096 bytes with Identify Controller data (CNS 01h).
 int nvmeter_read_identify(nvmeter_handle *h, uint8_t *buf4096);
+
+// Reads log page `lid` (e.g. 06h Device Self-test) into `buf`, `dwords` * 4 bytes. Read-only.
+int nvmeter_read_log_page(nvmeter_handle *h, uint8_t lid, uint8_t *buf, uint32_t dwords);
 
 #endif

@@ -19,6 +19,9 @@ struct RawBuffer {
 /// Owns the IOCFPlugIn SMART interface of one NVMe device.
 final class SMARTReader: @unchecked Sendable {
     private var handle: OpaquePointer?
+    var rawHandle: OpaquePointer? { handle }
+    /// Identify Controller OACS (bytes 256-257); bit 4 = Device Self-test.
+    private(set) var oacs: UInt16 = 0
     private(set) var identify: IdentifyInfo?
     /// IOReturn of the last failed `readSMART` (0 when it succeeded).
     private(set) var lastError: Int32 = 0
@@ -43,6 +46,7 @@ final class SMARTReader: @unchecked Sendable {
         let kr = buf.withUnsafeMutableBufferPointer { nvmeter_read_identify(h, $0.baseAddress) }
         guard kr == 0 else { return nil }
         let r = RawBuffer(bytes: buf)
+        oacs = r.u16(256)
         // Identify Controller: WCTEMP @266, CCTEMP @268 (Kelvin), VER @80, NN @516.
         func celsius(_ k: UInt16) -> Int? { k == 0 ? nil : Int(k) - 273 }
         let ver = r.u32(80)

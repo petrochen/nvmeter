@@ -53,7 +53,7 @@ struct GraphsView: View {
 
     private var totalRow: some View {
         let cur = monitor.totalHistory.last
-        let hottest = monitor.drives.compactMap { $0.smart?.temperatureC }.max()
+        let hottest = monitor.drives.compactMap { $0.temperatureC }.max()
         let w = window.rawValue
         return Card {
             HStack(alignment: .top, spacing: 16) {
@@ -82,7 +82,7 @@ struct GraphsView: View {
                 Text(d.displayName).font(.headline)
                 Text(d.subtitle).font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Text(Fmt.temp(d.smart?.temperatureC)).font(.callout.monospacedDigit().weight(.semibold))
+                Text(Fmt.temp(d.temperatureC)).font(.callout.monospacedDigit().weight(.semibold))
                 Text("R \(Fmt.rate(d.throughput.readMBps))  W \(Fmt.rate(d.throughput.writeMBps))")
                     .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             }

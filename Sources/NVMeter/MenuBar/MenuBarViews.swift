@@ -5,7 +5,7 @@ extension Monitor {
     /// Hottest composite temperature and its status over all drives with SMART.
     var hottest: (temp: Int, status: HealthStatus)? {
         let items = drives.compactMap { d -> (Int, HealthStatus)? in
-            guard let t = d.smart?.temperatureC else { return nil }
+            guard let t = d.temperatureC else { return nil }
             return (t, HealthEvaluator.tempStatus(t, warn: d.identify?.warningTempC, crit: d.identify?.criticalTempC))
         }
         guard let top = items.max(by: { $0.0 < $1.0 }) else { return nil }
@@ -131,7 +131,7 @@ struct PopoverRow: View {
                     }.font(.caption2.monospacedDigit()).labelStyle(CompactLabel())
                 }
                 Spacer(minLength: 4)
-                if let t = drive.smart?.temperatureC {
+                if let t = drive.temperatureC {
                     Sparkline(points: monitor.temps(drive.id, window: 300)).frame(width: 56, height: 22)
                     Text("\(t)°").font(.system(.title3, design: .rounded).monospacedDigit().weight(.semibold))
                         .foregroundStyle(HealthEvaluator.tempStatus(t, warn: drive.identify?.warningTempC, crit: drive.identify?.criticalTempC).color)

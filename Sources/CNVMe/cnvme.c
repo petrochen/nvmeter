@@ -48,3 +48,9 @@ int nvmeter_read_identify(nvmeter_handle *h, uint8_t *buf4096) {
     if (!h) return kIOReturnBadArgument;
     return (*h->smart)->GetIdentifyData(h->smart, buf4096, 0);
 }
+
+// NVMe Get Log Page (read-only). `dwords` is the real length in dwords (the interface wants it zero based).
+int nvmeter_read_log_page(nvmeter_handle *h, uint8_t lid, uint8_t *buf, uint32_t dwords) {
+    if (!h || !buf || dwords == 0) return kIOReturnBadArgument;
+    return (*h->smart)->GetLogPage(h->smart, buf, lid, dwords - 1);
+}
