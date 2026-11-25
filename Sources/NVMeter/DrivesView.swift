@@ -27,6 +27,7 @@ struct DrivesView: View {
                 ContentUnavailableView("Select a disk", systemImage: "externaldrive")
             }
         }
+        .reportToolbar()
     }
 }
 
