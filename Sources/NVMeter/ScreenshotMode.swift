@@ -28,16 +28,27 @@ enum ScreenshotMode {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let warmup = Double(value("--warmup") ?? "") ?? 60
         try? await Task.sleep(for: .seconds(warmup))        // let history build up
+        if CommandLine.arguments.contains("--seed-demo") {
+            DemoSeed.run(drives: monitor.drives.filter { $0.smart != nil }, store: monitor.store)
+        }
         let shots: [(AppTab, (DriveSnapshot) -> Bool, String)] = [
             (.drives, { $0.connection.kind == "thunderbolt" }, "drives"),
             (.drives, { $0.isUSBOther }, "drives-usb"),
             (.graphs, { _ in true }, "graphs"),
+            (.graphs, { _ in true }, "graphs-24h"),
+            (.graphs, { _ in true }, "graphs-7d"),
+            (.drives, { $0.connection.kind == "thunderbolt" }, "drives-usage"),
         ]
         for (tab, pick, name) in shots {
             monitor.tab = tab
+            monitor.scrollToUsage = false
+            if name == "graphs" { UserDefaults.standard.set(300.0, forKey: "graphWindow") }
+            if name == "graphs-24h" { UserDefaults.standard.set(86400.0, forKey: "graphWindow") }
+            if name == "graphs-7d" { UserDefaults.standard.set(604800.0, forKey: "graphWindow") }
+            if name == "drives-usage" { try? await Task.sleep(for: .seconds(1)); monitor.scrollToUsage = true }
             if let d = monitor.drives.first(where: pick) { monitor.selection = d.id }
             monitor.simulatedHoverAge = tab == .graphs ? 20 : nil
-            try? await Task.sleep(for: .seconds(2))
+            try? await Task.sleep(for: .seconds(name.hasPrefix("graphs-") || name == "drives-usage" ? 4 : 2))
             snapshot(to: dir.appendingPathComponent("\(name)-\(suffix).png"))
         }
         NSApp.terminate(nil)

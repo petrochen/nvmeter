@@ -4,6 +4,8 @@ struct DrivesView: View {
     @Environment(Monitor.self) private var monitor
     @AppStorage("showDisksWithoutSMART") private var showNoSMART = true
     @State private var columns = NavigationSplitViewVisibility.all
+    @State private var renaming: DriveSnapshot?
+    @State private var nameDraft = ""
 
     var body: some View {
         @Bindable var m = monitor
@@ -11,10 +13,10 @@ struct DrivesView: View {
         let others = showNoSMART ? monitor.drives.filter(\.isUSBOther) : []
         NavigationSplitView(columnVisibility: $columns) {
             List(selection: $m.selection) {
-                ForEach(withSMART) { d in DriveRow(drive: d).tag(d.id) }
+                ForEach(withSMART) { d in row(d) }
                 if !others.isEmpty {
                     Section("Other disks (no SMART)") {
-                        ForEach(others) { d in DriveRow(drive: d).tag(d.id) }
+                        ForEach(others) { d in row(d) }
                     }
                 }
             }
@@ -27,6 +29,21 @@ struct DrivesView: View {
                 ContentUnavailableView("Select a disk", systemImage: "externaldrive")
             }
         }
+        .alert("Rename drive", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("Name", text: $nameDraft)
+            Button("Rename") { if let d = renaming { monitor.rename(d.id, to: nameDraft) }; renaming = nil }
+            Button("Cancel", role: .cancel) { renaming = nil }
+        } message: { Text("Shown instead of the volume name. An empty name restores the default.") }
+    }
+
+    private func row(_ d: DriveSnapshot) -> some View {
+        DriveRow(drive: d).tag(d.id)
+            .contentShape(Rectangle())
+            .simultaneousGesture(TapGesture(count: 2).onEnded { nameDraft = d.customName ?? ""; renaming = d })
+            .contextMenu {
+                Button("Rename…") { nameDraft = d.customName ?? ""; renaming = d }
+                Button("Reset name") { monitor.rename(d.id, to: nil) }.disabled(d.customName == nil)
+            }
     }
 }
 
@@ -59,9 +76,11 @@ struct DriveRow: View {
 
 struct DriveDetail: View {
     let drive: DriveSnapshot
+    @Environment(Monitor.self) private var monitor
     @AppStorage("hideSerials") private var hideSerials = false
 
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 header
@@ -72,10 +91,13 @@ struct DriveDetail: View {
                 }
                 info
                 if drive.smart != nil { totals }
+                if drive.smart != nil { UsageSection(drive: drive).id("usage") }
                 volumes
                 if !drive.attributes.isEmpty { attributes }
             }
             .padding(20)
+        }
+        .onChange(of: monitor.scrollToUsage) { _, v in if v { proxy.scrollTo("usage", anchor: .top) } }
         }
     }
 
@@ -108,6 +130,7 @@ struct DriveDetail: View {
     private var info: some View {
         Card("Drive") {
             Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 5) {
+                DriveNameRow(drive: drive)
                 if drive.bridgeChip != nil {
                     row("Model", "drive model unknown (bridge does not pass NVMe identify)")
                     row("USB bridge", drive.bridgeChip ?? "-")

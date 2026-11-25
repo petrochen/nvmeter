@@ -33,7 +33,14 @@ final class DriveDevice: @unchecked Sendable {
         self.connection = ConnectionInfo(kind: "other", summary: interconnect)
     }
 
-    var stableID: String { serial.isEmpty ? "\(model)-\(key)" : serial }
+    private lazy var registryPath: String = DriveKey.registryPath(device)
+
+    /// Stable per physical drive: Identify model + serial, or the IORegistry path for drives without SMART / behind a bridge.
+    var stableID: String {
+        // Uses registry values only (not the SMART plug-in), so a transient SMART failure cannot change the key.
+        let real = smartCapable && VendorCatalog.bridgeChip(model: model) == nil
+        return DriveKey.make(model: model, serial: serial, registryPath: registryPath, smartCapable: real)
+    }
 
     func counters() -> IOCounters? {
         guard let s = driver.dict("Statistics") else { return nil }
