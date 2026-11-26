@@ -20,8 +20,10 @@ Swift + SwiftUI + Swift Charts, one self-contained `.app`, no runtime dependenci
   getting worse, a PCIe link or USB4 → USB downgrade, degraded RAID sets; an **Events** log; launch at login.
 - **Reports** (PDF / JSON / Markdown) for warranty claims, resale or forum posts, and SMART **snapshots** with
   compare.
-- **Speed Test** for media work: quick, sustained write with SLC-cache cliff detection, random 4K, and a verdict
-  per video format (ProRes, ProRes RAW, BRAW, H.265, uncompressed): does the drive keep up, how many streams.
+- **Speed Test** for media work: quick, sustained write with SLC-cache cliff detection, random 4K, a **live loop**
+  (write and read the test file again and again, two live dials, stops on a time / write limit or at the drive's
+  warning temperature), and a verdict per video format (ProRes, ProRes RAW, BRAW, H.265, uncompressed): a
+  resolution x frame rate grid per codec and how many streams fit.
 - **SATA / ATA SMART** for drives behind Thunderbolt / PCIe SATA controllers (without waking sleeping hard
   drives) and **AppleRAID** set status.
 - Every screen works in light and dark mode; "Hide serial numbers" makes screenshots safe to share.
@@ -176,12 +178,15 @@ Tests                      parser tests (swift test)
 
 ## Speed Test (the only part that writes)
 
-The Speed Test tab writes a temporary file to a mounted volume you pick (never anything else), measures
-Quick (5 GB sequential write and uncached read), Sustained write (SLC cache cliff detection) and Random 4K
-(QD1 / QD32), and rates the result against common video formats (approximate data rates in
+The Speed Test tab (and the Speed Test section of each drive) writes a temporary file to a mounted volume you pick
+(never anything else), measures Quick (5 GB sequential write and uncached read), Sustained write (SLC cache cliff
+detection), Random 4K (QD1 / QD32) and Live loop (a 1 to 10 GB file written and read back uncached in a loop, with
+live write / read dials and the MB/s trace; it stops after 2 to 60 minutes or 100 to 1000 GB written, whichever comes
+first, and early when the drive reaches its own warning temperature), and rates the result against common video formats (approximate data rates in
 `Sources/NVMeter/SpeedTest/VideoFormats.swift`). Test files live in `.nvmeter-speedtest/` and are always deleted,
 stale ones at the next launch. Last results per drive are kept in Application Support.
-CLI: `NVMeter --speedtest <mountpoint> --mode quick|sustained|random [--size GB|free10] [--seconds N]` prints JSON.
+CLI: `NVMeter --speedtest <mountpoint> --mode quick|sustained|random|live [--size GB|free10] [--seconds N] [--max-gb N]`
+prints JSON (`--seconds` is the time limit of a live loop, `--max-gb` its write limit).
 
 ## License
 

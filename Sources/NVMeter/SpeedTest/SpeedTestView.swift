@@ -3,25 +3,59 @@ import Charts
 
 struct SpeedTestView: View {
     @Environment(Monitor.self) private var monitor
-    @State private var runner = SpeedTestRunner()
+    var scopedDrive: DriveSnapshot? = nil
+    private var runner: SpeedTestRunner { monitor.speedRunner }
+    private var targetDrive: DriveSnapshot? { scopedDrive ?? monitor.selected }
+    private var runMatchesScope: Bool {
+        scopedDrive == nil || runner.drive(in: monitor)?.id == scopedDrive?.id
+    }
+    @State private var formatName = "ProRes 422 HQ 4K60"
     @State private var history = SpeedHistory.shared
     @State private var confirmBoot = false
 
     var body: some View {
         ScrollView {
             VStack(spacing: 12) {
-                controls
-                if runner.running || !runner.points.isEmpty { liveCard }
-                if let e = runner.error { Card { Label(e, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red) } }
-                if let r = runner.result { ResultCard(result: r) }
-                verdictCard
-                historyCard
+                if runner.running && !runMatchesScope {
+                    Text("A test is running on \(runner.volume?.name ?? runner.mountPoint).")
+                    Button("Show running test") { monitor.tab = .speed }
+                } else {
+                    controls
+                    if runner.running || runner.isDemo || (runner.result?.driveKey == driveKey && !runner.points.isEmpty) {
+                        if runner.showsLive { LiveLoopCard(runner: runner) } else { liveCard }
+                    }
+                    if let e = runner.error { Card { Label(e, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red) } }
+                    if let r = runner.result, r.driveKey == driveKey || runner.isDemo { ResultCard(result: r) }
+                    verdictCard
+                    historyCard
+                }
             }.padding(16)
         }
-        .onAppear { runner.refreshVolumes() }
+        .onAppear { refreshVolumes() }
+        .onChange(of: targetDrive?.volumes.map(\.mountPoint)) { _, _ in refreshVolumes() }
+        .onChange(of: runner.running) { _, running in if !running { refreshVolumes() } }
         .confirmationDialog("This is the startup volume", isPresented: $confirmBoot) {
-            Button("Test anyway") { runner.start(monitor: monitor) }
-        } message: { Text("The test writes \(gb(runner.plannedBytes)) GB to your startup disk and may slow the Mac down while it runs.") }
+            Button("Test anyway") { start() }
+        } message: {
+            Text("The test writes \(runner.mode == .live ? "up to \(Int(runner.liveMaxGB))" : gb(runner.plannedBytes)) GB to your startup disk and may slow the Mac down while it runs.")
+        }
+    }
+
+    private func refreshVolumes() {
+        guard monitor.tab == (scopedDrive == nil ? .speed : .drives) else { return }
+        runner.refreshVolumes(mounts: targetDrive?.volumes.map(\.mountPoint), scoped: scopedDrive != nil)
+    }
+
+    private func start() {
+        let path = runner.mountPoint
+        guard SpeedVolume.find(mountPoint: path) != nil,
+              scopedDrive == nil || monitor.drives.contains(where: { d in
+                  d.id == scopedDrive?.id && d.volumes.contains { $0.mountPoint == path }
+              }) else {
+            refreshVolumes()
+            return
+        }
+        runner.start(monitor: monitor)
     }
 
     private func gb(_ b: Int64) -> String { String(format: "%.0f", Double(b) / 1e9) }
@@ -34,6 +68,7 @@ struct SpeedTestView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     @Bindable var r = runner
                     Picker("Volume", selection: $r.mountPoint) {
+                        Text("Choose a writable volume").tag("")
                         ForEach(runner.volumes) { v in
                             Text("\(v.name)\(v.isBoot ? " (startup)" : "") - \(Fmt.capacity(UInt64(max(0, v.freeBytes)))) free").tag(v.mountPoint)
                         }
@@ -46,11 +81,13 @@ struct SpeedTestView: View {
                 Spacer()
                 VStack(alignment: .trailing, spacing: 8) {
                     if runner.running {
-                        Button(role: .cancel) { runner.cancel() } label: { Label("Cancel", systemImage: "xmark.circle") }.controlSize(.large)
+                        Button(role: .cancel) { runner.cancel() } label: {
+                            runner.mode == .live ? Label("Stop", systemImage: "stop.fill") : Label("Cancel", systemImage: "xmark.circle")
+                        }.controlSize(.large)
                     } else {
                         Button {
-                            if runner.volume?.isBoot == true { confirmBoot = true } else { runner.start(monitor: monitor) }
-                        } label: { Label("Start", systemImage: "play.fill") }
+                            if runner.volume?.isBoot == true { confirmBoot = true } else { start() }
+                        } label: { Label(runner.volume.map { "Start on \($0.name)" } ?? "Start", systemImage: "play.fill") }
                             .controlSize(.large).buttonStyle(.borderedProminent).disabled(runner.volume == nil)
                     }
                     if let d = runner.drive(in: monitor) {
@@ -77,14 +114,33 @@ struct SpeedTestView: View {
             }
         case .random:
             Text("4 KB random reads on a 4 GB file, QD1 and QD32, \(Int(runner.randomSeconds)) s each.").font(.caption).foregroundStyle(.secondary)
+        case .live:
+            HStack(spacing: 12) {
+                Picker("File", selection: $r.liveSizeGB) {
+                    ForEach(SpeedRequest.liveSizeChoices, id: \.self) { Text("\(Int($0)) GB").tag($0) }
+                }.frame(width: 120)
+                Picker("Stop after", selection: $r.liveMinutes) {
+                    ForEach(SpeedRequest.liveMinuteChoices, id: \.self) { Text("\(Int($0)) min").tag($0) }
+                }.frame(width: 170)
+                Picker("or", selection: $r.liveMaxGB) {
+                    ForEach(SpeedRequest.liveMaxGBChoices, id: \.self) { Text("\(Int($0)) GB written").tag($0) }
+                }.frame(width: 190)
+            }.disabled(runner.running)
+            Text("Writes the file and reads it back uncached, again and again, until you press Stop or a limit is reached. Also stops when the drive reaches its warning temperature.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
 
     @ViewBuilder private var warnings: some View {
         let planned = runner.plannedBytes
         VStack(alignment: .leading, spacing: 4) {
-            Label("This test writes about \(gb(planned)) GB to the SSD. Writing wears flash: use it sparingly.", systemImage: "exclamationmark.triangle")
-                .foregroundStyle(.orange)
+            if runner.mode == .live {
+                Label("The loop writes up to \(Int(runner.liveMaxGB)) GB in \(Int(runner.liveMinutes)) min (about 80 GB a minute on a fast SSD). Writing wears flash: keep runs short.", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+            } else {
+                Label("This test writes about \(gb(planned)) GB to the SSD. Writing wears flash: use it sparingly.", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+            }
             if let v = runner.volume {
                 let needed = planned + planned / 20 + 2_000_000_000
                 if v.freeBytes < needed {
@@ -153,8 +209,18 @@ struct SpeedTestView: View {
     private var verdictCard: some View {
         let hist = history.results(for: driveKey)
         return Card("Verdict for video (approximate)") {
-            if let input = Verdict.input(from: hist) { VerdictTable(input: input) }
-            else { Text("Run a Quick or Sustained write test to see which video formats this drive can record and play.").font(.callout).foregroundStyle(.secondary) }
+            if let input = Verdict.input(from: hist) {
+                Picker("Video format", selection: $formatName) {
+                    ForEach(VideoFormats.all) { Text($0.name).tag($0.name) }
+                }
+                if let format = VideoFormats.all.first(where: { $0.name == formatName }),
+                   let count = Verdict.streams(input.writeMBps, format) {
+                    Text("Estimated simultaneous write streams: \(count)")
+                }
+                DisclosureGroup("Resolution and frame rate grid") { FormatGridView(writeMBps: input.writeMBps, readMBps: input.readMBps) }
+                DisclosureGroup("Compare all formats") { VerdictTable(input: input) }
+            }
+            else { Text("Run a Quick, Live loop or Sustained write test to see which video formats this drive can record and play.").font(.callout).foregroundStyle(.secondary) }
         }
     }
 
@@ -187,6 +253,8 @@ struct ResultCard: View {
             return "avg \(Fmt.rate(r.write?.avgMBps ?? 0)), no cliff"
         case .random:
             return (r.random ?? []).map { "QD\($0.queueDepth) \(Int($0.iops)) IOPS" }.joined(separator: "  ")
+        case .live:
+            return "W \(Fmt.rate(r.write?.avgMBps ?? 0))  R \(Fmt.rate(r.read?.avgMBps ?? 0))  \(r.cycles?.count ?? 0) cycles"
         }
     }
 
@@ -207,6 +275,13 @@ struct ResultCard: View {
                     Label("No SLC cache cliff in \(Int(Double(result.write?.bytes ?? 0) / 1e9)) GB: write speed stayed steady. A bigger test may still find one.", systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green)
                 }
+            case .live:
+                HStack(spacing: 24) {
+                    stat("Write, all cycles", result.write)
+                    stat("Read, all cycles", result.read)
+                }
+                Text("\(result.cycles?.count ?? 0) full cycles of \(String(format: "%.0f GB", Double(result.testBytes) / 1e9)). \(result.stopReason ?? "")")
+                    .font(.callout)
             case .random:
                 ForEach(result.random ?? [], id: \.queueDepth) { s in
                     Text(String(format: "QD%d: %.0f IOPS, %@, mean latency %.0f µs", s.queueDepth, s.iops, Fmt.rate(s.mbps), s.meanLatencyUs)).font(.callout.monospacedDigit())

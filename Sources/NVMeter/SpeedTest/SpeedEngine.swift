@@ -240,4 +240,58 @@ enum SpeedEngine {
         }
         return (prep, out)
     }
+
+    // MARK: Live loop
+
+    /// Writes the test file, reads it back uncached, and repeats until cancelled, `seconds` elapsed or `maxBytes`
+    /// written (checked between passes, so the last pass always completes). Samples carry the cycle number and the
+    /// bytes written in the whole run.
+    static func live(dir: URL, bytes: Int64, seconds: Double, maxBytes: Int64, control: SpeedControl,
+                     progress: SpeedProgress?) throws -> (cycles: [LiveCycle], write: PhaseStat?, read: PhaseStat?, written: Int64, stop: String) {
+        let file = dir.appendingPathComponent("live.bin")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let t0 = now()
+        var written: Int64 = 0
+        var cycles: [LiveCycle] = []
+        var writes: [PhaseStat] = [], reads: [PhaseStat] = []
+        var stop = "Stopped"
+        var n = 0
+        while true {
+            if control.isCancelled { stop = "Stopped"; break }
+            if now() - t0 >= seconds { stop = "Time limit reached"; break }
+            if written + bytes > maxBytes { stop = "Write limit reached"; break }
+            n += 1
+            let cycle = n, base = written
+            let wrap: SpeedProgress = { s in
+                var s = s
+                s.cycle = cycle
+                s.totalWritten = base + (s.phase == .write ? s.bytes : bytes)
+                progress?(s)
+            }
+            let wfd = try open(file, flags: O_CREAT | O_WRONLY)
+            let w: PhaseStat
+            do { w = try sequential(fd: wfd, totalBytes: bytes, write: true, streams: writeStreams, phase: .write, control: control, progress: wrap).stat }
+            catch { close(wfd); throw error }
+            close(wfd)
+            written += w.bytes
+            if control.isCancelled { stop = "Stopped"; break }
+            let rfd = try open(file, flags: O_RDONLY)
+            let r: PhaseStat
+            do { r = try sequential(fd: rfd, totalBytes: bytes, write: false, streams: readStreams, phase: .read, control: control, progress: wrap).stat }
+            catch { close(rfd); throw error }
+            close(rfd)
+            if control.isCancelled { stop = "Stopped"; break }
+            writes.append(w); reads.append(r)
+            cycles.append(LiveCycle(writeMBps: w.avgMBps, readMBps: r.avgMBps))
+        }
+        return (cycles, aggregate(writes), aggregate(reads), written, stop)
+    }
+
+    /// Average over several passes (total bytes / total time); min and max are the slowest and fastest pass.
+    private static func aggregate(_ stats: [PhaseStat]) -> PhaseStat? {
+        guard !stats.isEmpty else { return nil }
+        let b = stats.reduce(Int64(0)) { $0 + $1.bytes }, t = stats.reduce(0.0) { $0 + $1.seconds }
+        return PhaseStat(avgMBps: t > 0 ? Double(b) / t / 1e6 : 0, minMBps: stats.map(\.avgMBps).min() ?? 0,
+                         maxMBps: stats.map(\.avgMBps).max() ?? 0, seconds: t, bytes: b)
+    }
 }

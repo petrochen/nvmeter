@@ -80,16 +80,48 @@ enum Verdict {
     /// Picks the most relevant measurements for one drive from its history (newest first).
     static func input(from history: [SpeedResult]) -> VerdictInput? {
         let sustained = history.first { $0.mode == .sustained && !$0.cancelled && $0.write != nil }
-        let quick = history.first { $0.mode == .quick && !$0.cancelled && $0.write != nil }
+        let quick = history.first { ($0.mode == .quick || $0.mode == .live) && !$0.cancelled && $0.write != nil }
         var w: Double?, ws = ""
         if let s = sustained {
             w = s.cliff?.afterMBps ?? s.write?.avgMBps
             ws = s.cliff != nil ? "sustained write after the cache cliff" : "sustained write (no cliff seen)"
         } else if let q = quick {
-            w = q.write?.avgMBps; ws = "quick write"
+            w = q.write?.avgMBps; ws = q.mode == .live ? "live loop write" : "quick write"
         }
         let r = quick?.read?.avgMBps
         guard w != nil || r != nil else { return nil }
-        return VerdictInput(writeMBps: w, readMBps: r, writeSource: ws, readSource: "quick read")
+        return VerdictInput(writeMBps: w, readMBps: r, writeSource: ws, readSource: quick?.mode == .live ? "live loop read" : "quick read")
     }
+}
+
+/// "Will it work?" grid: one codec at common resolutions and frame rates.
+enum FormatGrid {
+    struct Resolution: Identifiable, Sendable { var name: String; var width: Double; var height: Double; var id: String { name } }
+    struct Codec: Identifiable, Sendable {
+        var name: String
+        /// Mb/s per pixel per frame.
+        var bitsPerPixelFrame: Double
+        var id: String { name }
+        func mBps(_ r: Resolution, fps: Double) -> Double { bitsPerPixelFrame * r.width * r.height * fps / 8 }
+    }
+
+    static let resolutions = [
+        Resolution(name: "HD", width: 1920, height: 1080), Resolution(name: "4K UHD", width: 3840, height: 2160),
+        Resolution(name: "6K", width: 6144, height: 3456), Resolution(name: "8K", width: 7680, height: 4320),
+    ]
+    static let frameRates: [Double] = [24, 25, 30, 50, 60]
+
+    private static let uhdFrame = 3840.0 * 2160 * 29.97
+    private static let k6Frame = 6144.0 * 3456 * 24
+    /// Same sources as `VideoFormats`: ProRes from Apple's UHD 29.97 targets, BRAW from 6K 24p, uncompressed computed.
+    static let codecs: [Codec] = [
+        Codec(name: "ProRes 422 LT", bitsPerPixelFrame: 328 / uhdFrame),
+        Codec(name: "ProRes 422", bitsPerPixelFrame: 471 / uhdFrame),
+        Codec(name: "ProRes 422 HQ", bitsPerPixelFrame: 707 / uhdFrame),
+        Codec(name: "ProRes 4444", bitsPerPixelFrame: 1061 / uhdFrame),
+        Codec(name: "ProRes 4444 XQ", bitsPerPixelFrame: 1591 / uhdFrame),
+        Codec(name: "BRAW 12:1", bitsPerPixelFrame: 530 / k6Frame),
+        Codec(name: "BRAW 3:1", bitsPerPixelFrame: 2130 / k6Frame),
+        Codec(name: "Uncompressed 10-bit 4:2:2", bitsPerPixelFrame: 20 / 1e6),
+    ]
 }

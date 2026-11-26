@@ -42,6 +42,7 @@ enum ScreenshotMode {
             (.drives, { $0.id == worn(monitor, 0) }, "drives-usage"),          // most worn drive (carries the demo media errors)
             (.drives, { $0.id == worn(monitor, 1) }, "drives-usage-2"),
             (.speed, { _ in true }, "speedtest"),
+            (.speed, { _ in true }, "speedtest-live"),
         ]
         SpeedHistory.shared.demo = SpeedDemo.results()
         for (tab, pick, name) in shots {
@@ -50,6 +51,7 @@ enum ScreenshotMode {
             if name == "graphs" { UserDefaults.standard.set(300.0, forKey: "graphWindow") }
             if name == "graphs-24h" { UserDefaults.standard.set(86400.0, forKey: "graphWindow") }
             if name == "graphs-7d" { UserDefaults.standard.set(604800.0, forKey: "graphWindow") }
+            if name == "speedtest-live" { monitor.speedRunner.loadLiveDemo() }
             if name.hasPrefix("drives-usage") { try? await Task.sleep(for: .seconds(1)); monitor.scrollToUsage = true }
             if let d = monitor.drives.first(where: pick) { monitor.selection = name == "enclosure" ? EnclosureTopology.selectionID(for: d) : d.id }
             monitor.simulatedHoverAge = tab == .graphs ? 20 : nil

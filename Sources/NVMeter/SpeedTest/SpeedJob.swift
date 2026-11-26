@@ -43,15 +43,21 @@ struct SpeedRequest: Sendable {
     var untilTenPercentFree = false
     /// Random 4K: seconds per queue depth.
     var randomSeconds: Double = 30
+    /// Live loop: stop after this many seconds or this many bytes written, whichever comes first.
+    var liveSeconds: Double = 600
+    var liveMaxBytes: Int64 = 500_000_000_000
 
     static let sustainedChoices: [Double] = [20, 50, 100, 200]
+    static let liveSizeChoices: [Double] = [1, 2, 5, 10]
+    static let liveMinuteChoices: [Double] = [2, 5, 10, 30, 60]
+    static let liveMaxGBChoices: [Double] = [100, 250, 500, 1000]
 }
 
 enum SpeedJob {
     /// Bytes this request will write (used for the warning shown before starting).
     static func plannedBytes(_ r: SpeedRequest, volume: SpeedVolume) -> Int64 {
         switch r.mode {
-        case .quick: return Int64((r.sizeGB ?? 5) * 1e9)
+        case .quick, .live: return Int64((r.sizeGB ?? 5) * 1e9)
         case .random: return Int64((r.sizeGB ?? 4) * 1e9)
         case .sustained:
             if r.untilTenPercentFree { return max(0, volume.freeBytes - volume.totalBytes / 10) }
@@ -80,6 +86,14 @@ enum SpeedJob {
         case .random:
             let (prep, stats) = try SpeedEngine.random(dir: dir, fileBytes: planned, seconds: r.randomSeconds, control: control, progress: progress)
             res.write = prep; res.random = stats; res.bytesWritten = prep.bytes
+        case .live:
+            let out = try SpeedEngine.live(dir: dir, bytes: planned, seconds: r.liveSeconds, maxBytes: r.liveMaxBytes,
+                                           control: control, progress: progress)
+            res.write = out.write; res.read = out.read; res.cycles = out.cycles; res.bytesWritten = out.written
+            res.stopReason = out.stop
+            // Stop is the normal way to end a loop: the run counts once one full cycle is done.
+            res.cancelled = out.cycles.isEmpty
+            return res
         }
         res.cancelled = control.isCancelled
         return res
