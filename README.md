@@ -1,3 +1,5 @@
+<img src="docs/icon.png" alt="NVMeter icon" width="96" align="right">
+
 # NVMeter
 
 [![CI](https://github.com/petrochen/nvmeter/actions/workflows/ci.yml/badge.svg)](https://github.com/petrochen/nvmeter/actions/workflows/ci.yml)
