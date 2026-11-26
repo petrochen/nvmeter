@@ -60,6 +60,10 @@ enum ScreenshotMode {
         }
         UserDefaults.standard.set(savedWindow, forKey: "graphWindow")      // do not leave the user's app on another window
         MenuBarShots.render(monitor, dir: dir, suffix: suffix)
+        // Share card of the latest real enclosure test (drive models and numbers only, no volume names).
+        if let r = EnclosureTestHistory.load().max(by: { $0.scenarios.count < $1.scenarios.count }), let png = ShareButton.png(AnyView(EnclosureShareCard(result: r))) {
+            try? png.write(to: dir.appendingPathComponent("share-enclosure-\(suffix).png"))
+        }
         NSApp.terminate(nil)
     }
 
@@ -82,11 +86,23 @@ enum DemoNames {
     static let enabled = CommandLine.arguments.contains("--demo-names")
     private static let pool = ["A001_Footage", "Proxies", "Archive_2025", "Cache", "Backup", "Client_Delivery", "Photos_RAW"]
 
+    /// Real volume name -> demo name, filled by `apply` (read on the main thread by views).
+    nonisolated(unsafe) private static var map: [String: String] = [:]
+
+    /// Demo name for a real volume name (unchanged when demo names are off).
+    static func name(_ real: String) -> String { enabled ? map[real] ?? real : real }
+    /// Demo mount point for a real one, so lists that read volumes directly (Speed Test) match the renamed drives.
+    static func mountPoint(_ real: String) -> String {
+        guard enabled, real.hasPrefix("/Volumes/") else { return real }
+        return "/Volumes/" + name(String(real.dropFirst("/Volumes/".count)))
+    }
+
     static func apply(_ drives: inout [DriveSnapshot]) {
         // Stable mapping: real names sorted, the startup volume keeps its standard name.
         let real = Set(drives.flatMap { ($0.volumes + $0.unmountedVolumes).map(\.name) }).subtracting(["Macintosh HD"]).sorted()
         var map: [String: String] = [:]
         for (i, n) in real.enumerated() { map[n] = i < pool.count ? pool[i] : "Volume \(i + 1)" }
+        Self.map = map
         func fix(_ v: inout VolumeInfo) {
             guard let new = map[v.name] else { return }
             v.name = new

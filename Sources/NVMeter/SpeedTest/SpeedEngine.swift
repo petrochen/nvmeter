@@ -16,7 +16,10 @@ enum SpeedEngine {
     static let block = 1 << 20
     static let writeStreams = 4
     static let readStreams = 8
+    /// Chart points and the series the cliff detector reads: one value per 0.5 s.
     static let sampleInterval = 0.5
+    /// Dial updates: every 0.1 s, as a rate over the last `RateMeter.window` seconds so the needles don't jitter.
+    static let tickInterval = 0.1
 
     // MARK: Folder handling
 
@@ -121,14 +124,19 @@ enum SpeedEngine {
             }
         }
         let t0 = now()
-        var last = t0, lastBytes: Int64 = 0
+        var meter = RateMeter(t0: t0)
+        var last = t0, lastBytes: Int64 = 0, n = 0
         var series: [Double] = []
-        while group.wait(timeout: .now() + sampleInterval) == .timedOut {
+        while group.wait(timeout: .now() + tickInterval) == .timedOut {
             let t = now(), b = shared.bytes
-            let mb = Double(b - lastBytes) / (t - last) / 1e6
-            series.append(mb)
-            progress?(SpeedSample(id: series.count, phase: phase, t: t - t0, mbps: mb, iops: 0, bytes: b))
-            last = t; lastBytes = b
+            let mb = meter.add(t, Double(b)) / 1e6
+            var chart = false
+            if t - last >= sampleInterval - 0.02 {
+                series.append(Double(b - lastBytes) / (t - last) / 1e6)
+                last = t; lastBytes = b; chart = true
+            }
+            n += 1
+            progress?(SpeedSample(id: n, phase: phase, t: t - t0, mbps: mb, iops: 0, bytes: b, chart: chart))
         }
         if write, shared.error == 0, !control.isCancelled { _ = fcntl(fd, F_FULLFSYNC) }
         let dur = now() - t0
@@ -222,14 +230,16 @@ enum SpeedEngine {
                     c.lock.withLock { $0.ops = o; $0.latNs = l }
                 }
             }
-            var last = t0, lastOps: Int64 = 0, n = 0
-            while group.wait(timeout: .now() + sampleInterval) == .timedOut {
+            var meter = RateMeter(t0: t0)
+            var last = t0, n = 0
+            while group.wait(timeout: .now() + tickInterval) == .timedOut {
                 let t = now()
                 let ops = counters.reduce(Int64(0)) { $0 + $1.lock.withLock { $0.ops } }
                 n += 1
-                let iops = Double(ops - lastOps) / (t - last)
-                progress?(SpeedSample(id: n, phase: phase, t: t - t0, mbps: iops * 4096 / 1e6, iops: iops, bytes: ops * 4096))
-                last = t; lastOps = ops
+                let iops = meter.add(t, Double(ops))
+                let chart = t - last >= sampleInterval - 0.02
+                if chart { last = t }
+                progress?(SpeedSample(id: n, phase: phase, t: t - t0, mbps: iops * 4096 / 1e6, iops: iops, bytes: ops * 4096, chart: chart))
             }
             let dur = now() - t0
             var ops: Int64 = 0, lat = 0.0
@@ -293,5 +303,20 @@ enum SpeedEngine {
         let b = stats.reduce(Int64(0)) { $0 + $1.bytes }, t = stats.reduce(0.0) { $0 + $1.seconds }
         return PhaseStat(avgMBps: t > 0 ? Double(b) / t / 1e6 : 0, minMBps: stats.map(\.avgMBps).min() ?? 0,
                          maxMBps: stats.map(\.avgMBps).max() ?? 0, seconds: t, bytes: b)
+    }
+}
+
+/// Rate over a sliding window: smooth enough for a needle, fresh enough for 10 updates a second.
+struct RateMeter: Sendable {
+    static let window = 0.5
+    private var points: [(t: Double, v: Double)]
+    init(t0: Double, start: Double = 0) { points = [(t0, start)] }
+
+    /// Adds a cumulative value at time `t`; returns the rate per second over roughly the last `window` seconds.
+    mutating func add(_ t: Double, _ v: Double) -> Double {
+        points.append((t, v))
+        while points.count > 2, t - points[1].t >= Self.window { points.removeFirst() }
+        let f = points[0]
+        return t > f.t ? (v - f.v) / (t - f.t) : 0
     }
 }

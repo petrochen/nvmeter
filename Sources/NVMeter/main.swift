@@ -31,6 +31,7 @@ if CommandLine.arguments.contains("--speedtest-selftest") {
 }
 if CommandLine.arguments.contains("--volume") { MountCLI.run() }
 if CommandLine.arguments.contains("--mcp") { MCPServer.run() }
+if CommandLine.arguments.contains("--enclosure-test") { EnclosureTestCLI.run() }
 
 // One app instance: two would record the same history twice and double every notification.
 // Screenshot mode renders its own windows and may run next to the app.

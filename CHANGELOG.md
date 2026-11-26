@@ -3,6 +3,16 @@
 All notable changes, newest first. Versions follow [semantic versioning](https://semver.org); until 1.0 a minor
 version can change behaviour. Each release section below is used as the GitHub release notes.
 
+## 0.11.0 (2026-11-26)
+
+- Whole-enclosure test: every drive at once (all reading, all writing, both directions, heat soak), read only by
+  default, with a plain answer on what limits the speed: the shared link, a slot's PCIe x1 or the drive itself.
+  Also as `--enclosure-test` and the MCP tool `enclosure_test`.
+- Speed Test screen rebuilt around questions instead of test modes: one Start button between write and read dials,
+  a live "can it handle your footage?" grid, and tiles for long recordings, photos and small files, and heat soak.
+- Dials update ten times a second (rate over the last 0.5 s); charts and the cache cliff detector are unchanged.
+- Share: a picture of a speed or enclosure result for reviews and forum posts, without serial numbers or volume names.
+
 ## 0.10.0 (2026-11-26)
 
 First release published as a signed and notarized app (Developer ID: ESCUDIX LTD), universal (Apple silicon and

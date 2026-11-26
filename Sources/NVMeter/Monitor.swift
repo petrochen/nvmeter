@@ -23,6 +23,8 @@ final class Monitor {
     /// Set after a mount / unmount so the next tick re-reads volumes instead of waiting for the SMART interval.
     @ObservationIgnored var forceRefresh = false
     let speedRunner = SpeedTestRunner()
+    /// Speed Test tab target set from elsewhere (an enclosure's "Test this enclosure"): an enclosure selection id.
+    var speedEnclosure: String?
     let alerts = AlertCenter.shared
     /// Screenshot mode only: pretend the cursor hovers this many seconds before "now".
     var simulatedHoverAge: TimeInterval?

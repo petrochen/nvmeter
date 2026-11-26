@@ -47,7 +47,7 @@ enum SpeedCLI {
         poller.start()
         do {
             var res = try SpeedJob.run(req, driveKey: before.key, driveName: before.name, control: control) { s in
-                if s.id % 4 == 0 {
+                if s.chart, Int((s.t * 2).rounded()) % 4 == 0 {
                     let line = (s.cycle > 0 ? "cycle \(s.cycle) " : "") + String(format: "%@ %.0fs %.0f MB/s\n", s.phase.rawValue, s.t, s.mbps)
                     FileHandle.standardError.write(Data(line.utf8))
                 }

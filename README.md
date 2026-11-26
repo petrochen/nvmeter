@@ -82,12 +82,26 @@ check saves a SMART snapshot, so "what changed since March" is one compare away.
 
 ### Speed tests that answer production questions
 
-Quick (5 GB write and uncached read), sustained write that finds the point where the SLC cache runs out, random 4K,
-and a live loop that writes and reads again and again with two dials until you stop it or it hits a time, size or
-temperature limit. Results turn into a resolution by frame rate grid per codec: ProRes 422 to 4444 XQ, BRAW,
-uncompressed. It tells you whether the drive can record it and whether it can play it back.
+Press Start and two dials show write and read speed, updated ten times a second, while NVMeter writes a test file
+and reads it back until you press Stop. Underneath, a grid fills in as it runs: ProRes 422 to 4444 XQ, BRAW and
+uncompressed at HD to 8K and 24 to 60 fps, and whether the drive keeps up with recording and with playback.
+
+Three more tests answer the questions that come up before a shoot. Long recording keeps writing until it finds the
+point where the drive's fast cache runs out. Photos and small files reads small blocks at random, the way a catalog or
+a photo library does. Heat soak runs for minutes with a temperature chart. Results come in plain sentences, and Share
+turns one into a picture for a review or a forum post.
 
 ![Live speed test](docs/screenshots/speed-test-live.png)
+
+### The whole enclosure under load
+
+Test enclosure puts every drive to work at once: all reading, all writing, both directions, and an optional heat soak.
+Drives read files that are already on them and write nothing, unless you let one write a temporary file. The result
+says what limits the speed. On the OWC Express 4M2 below, four drives reading fill the 40 Gb/s link at 3.85 GB/s and
+slow each other down, while one drive writing and three reading reach 4.83 GB/s together, because the link carries
+both directions at once.
+
+![Enclosure test](docs/screenshots/enclosure-test.png)
 
 ### Volumes you control
 
@@ -187,6 +201,7 @@ claude mcp add --scope user nvmeter -- /Applications/NVMeter.app/Contents/MacOS/
 | `compare_snapshots` | SMART snapshot vs snapshot or now, with deltas per day |
 | `drive_report` | the shareable report as Markdown or JSON |
 | `speed_test` | writes: quick, random, live or sustained test (needs `confirm: true`) |
+| `enclosure_test` | all drives of an enclosure at once, read only unless drives are allowed to write (needs `confirm: true`) |
 | `volume` | unmount, mount, read-only / read-write remount (needs `confirm: true`) |
 
 Serial numbers are hidden unless `include_serials` is set. The two state-changing tools only describe what they would
@@ -354,7 +369,15 @@ first, and early when the drive reaches its own warning temperature), and rates 
 `Sources/NVMeter/SpeedTest/VideoFormats.swift`). Test files live in `.nvmeter-speedtest/` and are always deleted,
 stale ones at the next launch. Last results per drive are kept in Application Support.
 CLI: `NVMeter --speedtest <mountpoint> --mode quick|sustained|random|live [--size GB|free10] [--seconds N] [--max-gb N]`
-prints JSON (`--seconds` is the time limit of a live loop, `--max-gb` its write limit).
+prints JSON (`--seconds` is the time limit of a live loop, `--max-gb` its write limit). Dials update every 0.1 s from
+a rate over the last 0.5 s; charts and the cache cliff detector use 0.5 s samples.
+
+The enclosure test (`NVMeter --enclosure-test [--rw <mountpoint>]... [--skip <mountpoint>]... [--scenarios
+readAll,writeAll,both,heat] [--seconds N] [--heat-seconds N]`) reads existing files on each drive uncached (largest
+files first, at least 1 GB) or, for drives listed with `--rw`, writes and reads a temporary 4 GB file in
+`.nvmeter-speedtest/`. Findings compare each direction with about 85 % of the link budget and each drive with 90 % of
+its slot's PCIe ceiling. Results are kept in `enclosure-tests.json`; the share card shows drive slots and speeds, never
+volume names or serial numbers.
 
 ## Contributing
 

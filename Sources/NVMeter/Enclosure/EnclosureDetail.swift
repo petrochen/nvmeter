@@ -24,6 +24,14 @@ struct EnclosureDetail: View {
                     }
                     budget(e)
                     slotTable(e)
+                    Card("Test") {
+                        HStack {
+                            Text("Put load on all drives at once to see what this enclosure really delivers and which slot or drive holds things back. Read only by default: nothing is written.")
+                                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                            Spacer()
+                            Button { monitor.speedEnclosure = e.id; monitor.tab = .speed } label: { Label("Test this enclosure", systemImage: "speedometer") }
+                        }
+                    }
                     Card("Eject") {
                         EjectControls(drives: e.drives, ejectTitle: "Eject all volumes of this enclosure", sheetTitle: e.name)
                     }

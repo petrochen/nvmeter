@@ -1,73 +1,92 @@
 import SwiftUI
 import Charts
 
-/// Live loop: two dials (write, read), run counters, the MB/s trace and the "will it work?" grid.
-struct LiveLoopCard: View {
+/// The main speed test, Blackmagic style: write and read dials around one Start / Stop button, a plain status line,
+/// and while it runs the elapsed time, data written, temperature and the speed and temperature traces.
+struct SpeedHero: View {
     @Environment(Monitor.self) private var monitor
     let runner: SpeedTestRunner
+    let canStart: Bool
+    let idleText: String
+    let start: () -> Void
 
-    private var shownWrite: Double { runner.running ? runner.liveWrite : (runner.result?.write?.avgMBps ?? runner.avgWrite ?? 0) }
-    private var shownRead: Double { runner.running ? runner.liveRead : (runner.result?.read?.avgMBps ?? runner.avgRead ?? 0) }
-    private var gridWrite: Double? { runner.running ? (runner.avgWrite ?? nonZero(runner.liveWrite)) : runner.result?.write?.avgMBps ?? runner.avgWrite }
-    private var gridRead: Double? { runner.running ? (runner.avgRead ?? nonZero(runner.liveRead)) : runner.result?.read?.avgMBps ?? runner.avgRead }
-    private func nonZero(_ v: Double) -> Double? { v > 0 ? v : nil }
+    private var isLive: Bool { runner.running ? runner.mode == .live : runner.result?.mode == .live }
+    private var result: SpeedResult? { runner.running ? nil : runner.result }
 
-    /// Shared dial scale: a round number above everything seen so far.
+    private var writeValue: Double {
+        if runner.running {
+            if runner.mode == .live { return runner.liveWrite }
+            return runner.phase == .write || runner.phase == .sustainedWrite ? runner.liveMBps : 0
+        }
+        return result?.write?.avgMBps ?? 0
+    }
+    private var readValue: Double {
+        if runner.running {
+            if runner.mode == .live { return runner.liveRead }
+            return runner.phase == .read || runner.phase == .randomQD1 || runner.phase == .randomQD32 ? runner.liveMBps : 0
+        }
+        return result?.mode == .random ? (result?.random?.last?.mbps ?? 0) : (result?.read?.avgMBps ?? 0)
+    }
+
     private var scale: Double {
-        let peak = max(runner.points.map(\.mbps).max() ?? 0, shownWrite, shownRead, 1)
-        return [500.0, 1000, 1500, 2000, 3000, 4000, 5000, 6000, 8000, 10000, 15000].first { $0 >= peak * 1.1 } ?? 20000
+        let peak = max(runner.points.map(\.mbps).max() ?? 0, writeValue, readValue, 1)
+        return [2000.0, 3000, 4000, 6000, 8000, 10000, 15000].first { $0 >= peak * 1.1 } ?? 20000
     }
 
     var body: some View {
-        Card(runner.running ? "Live loop · cycle \(max(runner.cycle, 1))" : "Live loop") {
-            HStack(alignment: .center, spacing: 28) {
-                SpeedDial(title: "Write", value: shownWrite, average: runner.avgWrite, scale: scale, tint: .orange,
-                          active: runner.running && runner.phase == .write)
-                SpeedDial(title: "Read", value: shownRead, average: runner.avgRead, scale: scale, tint: .blue,
-                          active: runner.running && runner.phase == .read)
-                stats
+        Card {
+            HStack(alignment: .center, spacing: 34) {
+                Spacer(minLength: 0)
+                SpeedDial(title: "Write", value: writeValue, average: isLive ? runner.avgWrite : nil, scale: scale, tint: .orange,
+                          active: runner.running && (runner.phase == .write || runner.phase == .sustainedWrite))
+                    .scaleEffect(1.2).frame(width: 216, height: 204)
+                StartStopButton(running: runner.running, enabled: runner.running || canStart) {
+                    if runner.running { runner.cancel() } else { start() }
+                }
+                SpeedDial(title: "Read", value: readValue, average: isLive ? runner.avgRead : nil, scale: scale, tint: .blue,
+                          active: runner.running && !(runner.phase == .write || runner.phase == .sustainedWrite) && runner.phase != nil)
+                    .scaleEffect(1.2).frame(width: 216, height: 204)
                 Spacer(minLength: 0)
             }
-            trace.frame(height: 130)
-        }
-        Card("Will it work? (\(runner.running ? "averages so far" : "this run"))") {
-            FormatGridView(writeMBps: gridWrite, readMBps: gridRead)
+            Text(runner.running ? runner.statusLine : (result.map(ResultCard.plain) ?? idleText))
+                .font(.callout).multilineTextAlignment(.center).foregroundStyle(runner.running ? .primary : .secondary)
+                .frame(maxWidth: .infinity).fixedSize(horizontal: false, vertical: true)
+            if runner.running || !runner.points.isEmpty { stats }
+            if !runner.points.isEmpty {
+                HStack(alignment: .top, spacing: 16) {
+                    trace.frame(height: 120)
+                    if runner.tempPoints.count > 1 { tempTrace.frame(width: 260, height: 120) }
+                }
+            }
         }
     }
 
     private var stats: some View {
         let elapsed = (runner.running ? Date() : runner.result?.date ?? Date()).timeIntervalSince(runner.startedAt ?? Date())
-        let limit = runner.liveMinutes * 60
-        return VStack(alignment: .leading, spacing: 6) {
-            row("clock", runner.running ? "\(mmss(elapsed)) of \(mmss(limit))" : runner.result.map { "\(($0.cycles ?? []).count) cycles" } ?? "-")
-            row("square.and.arrow.down", String(format: "%.1f of %.0f GB written", Double(runner.totalWritten) / 1e9, runner.liveMaxGB))
-            row("thermometer.medium", tempText)
-            if let r = runner.result, !runner.running, let why = r.stopReason {
-                Label(why, systemImage: why.hasPrefix("Stopped at") ? "thermometer.high" : "stop.circle")
-                    .foregroundStyle(why.hasPrefix("Stopped at") ? .orange : .secondary).font(.caption)
+        return HStack(spacing: 22) {
+            Spacer(minLength: 0)
+            if runner.running { stat("clock", mmss(elapsed)) }
+            stat("square.and.arrow.down", String(format: "%.1f GB written", Double(runner.running ? runner.totalWritten : runner.result?.bytesWritten ?? 0) / 1e9))
+            stat("thermometer.medium", temperature)
+            if isLive, runner.cycle > 0 || (runner.result?.cycles?.count ?? 0) > 0 {
+                let n = runner.running ? runner.cycle : runner.result?.cycles?.count ?? 0
+                stat("arrow.triangle.2.circlepath", "\(n) pass\(n == 1 ? "" : "es")")
             }
-            if let r = runner.result, !runner.running, let w = r.write, let rd = r.read, (r.cycles?.count ?? 0) > 1 {
-                Text("Cycle to cycle: write \(Fmt.rate(w.minMBps))–\(Fmt.rate(w.maxMBps)), read \(Fmt.rate(rd.minMBps))–\(Fmt.rate(rd.maxMBps))")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-        }.font(.callout.monospacedDigit()).frame(minWidth: 220, alignment: .leading)
+            Spacer(minLength: 0)
+        }.font(.callout.monospacedDigit()).foregroundStyle(.secondary)
     }
 
-    private var tempText: String {
+    private var temperature: String {
         let now = runner.drive(in: monitor)?.temperatureC
         var s = Fmt.temp(runner.running ? now : runner.result?.tempMaxC)
-        if let a = runner.tempStartC, let m = runner.tempMaxC { s += "  (\(a) → max \(m) °C)" }
+        if let a = runner.tempStartC, let m = runner.tempMaxC, m > a { s += " (from \(a), max \(m))" }
         return s
     }
 
-    private func row(_ icon: String, _ text: String) -> some View {
-        Label { Text(text) } icon: { Image(systemName: icon).frame(width: 18) }
-    }
-
-    private func mmss(_ t: TimeInterval) -> String { String(format: "%d:%02d", Int(t) / 60, Int(t) % 60) }
+    private func stat(_ icon: String, _ text: String) -> some View { Label(text, systemImage: icon) }
+    private func mmss(_ t: TimeInterval) -> String { String(format: "%d:%02d", Int(max(0, t)) / 60, Int(max(0, t)) % 60) }
 
     private var trace: some View {
-        // Number the passes so a write line never joins the following read line.
         var pass = 0, last: SpeedPhase?
         let tagged = runner.points.map { p -> (ChartPoint, Int) in
             if p.phase != last { pass += 1; last = p.phase }
@@ -75,13 +94,52 @@ struct LiveLoopCard: View {
         }
         return Chart(tagged, id: \.0.id) { p, pass in
             LineMark(x: .value("s", p.x), y: .value("MB/s", p.mbps), series: .value("pass", pass))
-                .foregroundStyle(by: .value("direction", p.phase == .write ? "Write" : "Read"))
+                .foregroundStyle(by: .value("direction", p.phase == .write || p.phase == .sustainedWrite ? "Write" : "Read"))
                 .interpolationMethod(.monotone)
         }
         .chartForegroundStyleScale(["Write": Color.orange, "Read": Color.blue])
         .chartYScale(domain: 0...scale)
         .chartXAxisLabel("seconds")
         .chartYAxisLabel("MB/s")
+    }
+
+    private var tempTrace: some View {
+        let pts = runner.tempPoints
+        let lo = Double((pts.map(\.c).min() ?? 30) - 3), hi = Double((pts.map(\.c).max() ?? 50) + 3)
+        return Chart(Array(pts.enumerated()), id: \.offset) { _, p in
+            LineMark(x: .value("s", p.x), y: .value("°C", p.c)).foregroundStyle(.red).interpolationMethod(.monotone)
+        }
+        .chartYScale(domain: lo...hi)
+        .chartXAxisLabel("seconds")
+        .chartYAxisLabel("°C")
+    }
+}
+
+/// The big round Start / Stop button between the dials.
+struct StartStopButton: View {
+    let running: Bool
+    let enabled: Bool
+    let action: () -> Void
+    @State private var hover = false
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle().fill(running ? Color.red.gradient : Color.accentColor.gradient)
+                    .shadow(color: .black.opacity(hover ? 0.25 : 0.12), radius: hover ? 8 : 4, y: 2)
+                VStack(spacing: 2) {
+                    Image(systemName: running ? "stop.fill" : "play.fill").font(.system(size: 22, weight: .bold))
+                    Text(running ? "STOP" : "START").font(.system(size: 13, weight: .heavy, design: .rounded))
+                }.foregroundStyle(.white)
+            }
+            .frame(width: 104, height: 104)
+            .opacity(enabled ? 1 : 0.4)
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .onHover { hover = $0 }
+        .keyboardShortcut(.space, modifiers: [])
+        .accessibilityLabel(running ? "Stop the test" : "Start the speed test")
     }
 }
 

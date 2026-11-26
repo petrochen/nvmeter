@@ -21,6 +21,10 @@ final class SpeedTestRunner {
     var liveSizeGB: Double = 5
     var liveMinutes: Double = 10
     var liveMaxGB: Double = 500
+    /// Heat soak: the loop runs this long instead of `liveMinutes` (set by the Heat soak tile, cleared after the run).
+    var heatMinutes: Double?
+    /// Temperature of the drive under test, one point per chart sample: (seconds since start, °C).
+    private(set) var tempPoints: [(x: Double, c: Int)] = []
 
     private(set) var running = false
     private(set) var points: [ChartPoint] = []
@@ -72,14 +76,15 @@ final class SpeedTestRunner {
         SpeedRequest(mountPoint: mountPoint, mode: mode,
                      sizeGB: mode == .sustained && sustainedGB > 0 ? sustainedGB : (mode == .live ? liveSizeGB : nil),
                      untilTenPercentFree: mode == .sustained && sustainedGB == 0, randomSeconds: randomSeconds,
-                     liveSeconds: liveMinutes * 60, liveMaxBytes: Int64(liveMaxGB * 1e9))
+                     liveSeconds: (heatMinutes ?? liveMinutes) * 60, liveMaxBytes: Int64(liveMaxGB * 1e9))
     }
 
     var plannedBytes: Int64 { volume.map { SpeedJob.plannedBytes(request(), volume: $0) } ?? 0 }
 
     /// The drive under test, matched by the mount point of one of its volumes.
     func drive(in monitor: Monitor) -> DriveSnapshot? {
-        monitor.drives.first { d in d.volumes.contains { $0.mountPoint == mountPoint } }
+        let mp = DemoNames.mountPoint(mountPoint)
+        return monitor.drives.first { d in d.volumes.contains { $0.mountPoint == mp } }
     }
 
     func start(monitor: Monitor) {
@@ -93,7 +98,7 @@ final class SpeedTestRunner {
         running = true; error = nil; result = nil; points = []; phase = nil; xOffset = 0; lastPhaseX = 0
         liveMBps = 0; liveIOPS = 0; totalWritten = 0; bytesInPhase = 0
         liveWrite = 0; liveRead = 0; cycle = 0; startedAt = Date(); autoStop = nil
-        sums = (0, 0, 0, 0); avgWrite = nil; avgRead = nil
+        sums = (0, 0, 0, 0); avgWrite = nil; avgRead = nil; tempPoints = []
         tempStartC = d?.temperatureC; tempMaxC = tempStartC
         Task { [weak self] in
             let outcome: Result<SpeedResult, Error> = await Task.detached(priority: .userInitiated) {
@@ -114,12 +119,15 @@ final class SpeedTestRunner {
         if phase != s.phase { if phase != nil { xOffset = lastPhaseX }; phase = s.phase }
         let x = xOffset + s.t
         lastPhaseX = x
-        points.append(ChartPoint(id: points.count, x: x, mbps: s.mbps, phase: s.phase))
+        if s.chart {
+            points.append(ChartPoint(id: points.count, x: x, mbps: s.mbps, phase: s.phase))
+            if let c = drive(in: monitor)?.temperatureC { tempPoints.append((Date().timeIntervalSince(startedAt ?? Date()), c)) }
+        }
         liveMBps = s.mbps; liveIOPS = s.iops; bytesInPhase = s.bytes
         if s.cycle > 0 {
             cycle = s.cycle; totalWritten = s.totalWritten
             if s.phase == .write { liveWrite = s.mbps } else { liveRead = s.mbps }
-            if s.id > 1 {   // the first 0.5 s of a pass includes the ramp-up
+            if s.chart, s.t > 0.75 {   // averages from chart samples; the first 0.5 s of a pass includes the ramp-up
                 if s.phase == .write { sums.w += s.mbps; sums.wn += 1; avgWrite = sums.w / Double(sums.wn) }
                 else { sums.r += s.mbps; sums.rn += 1; avgRead = sums.r / Double(sums.rn) }
             }
@@ -136,7 +144,7 @@ final class SpeedTestRunner {
     }
 
     private func finish(_ outcome: Result<SpeedResult, Error>, monitor: Monitor, key: String) {
-        running = false; control = nil
+        running = false; control = nil; heatMinutes = nil
         switch outcome {
         case .success(var r):
             r.tempStartC = tempStartC; r.tempMaxC = tempMaxC
@@ -145,6 +153,19 @@ final class SpeedTestRunner {
             SpeedHistory.shared.add(r)
         case .failure(let e):
             error = e.localizedDescription
+        }
+    }
+
+    /// One plain sentence about what is happening right now (or what Start will do).
+    var statusLine: String {
+        guard running else { return "" }
+        switch phase {
+        case .write?: return mode == .live ? "Writing the test file · pass \(max(cycle, 1))" : "Writing the test file"
+        case .read?: return mode == .live ? "Reading it back · pass \(max(cycle, 1))" : "Reading it back"
+        case .sustainedWrite?: return String(format: "Writing without a break: %.0f of %.0f GB", Double(bytesInPhase) / 1e9, Double(plannedBytes) / 1e9)
+        case .randomQD1?: return "Small reads, one at a time (like opening single photos)"
+        case .randomQD32?: return "Small reads, many at once (like a catalog or an app loading)"
+        case nil: return "Preparing"
         }
     }
 

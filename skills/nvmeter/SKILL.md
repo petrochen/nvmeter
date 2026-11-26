@@ -13,7 +13,7 @@ interpreted data, and history exists nowhere else.
 ## Getting the data, in this order
 
 1. **MCP tools** (server `nvmeter`): `list_drives` first, then `drive_details`, `history`, `events`, `enclosures`,
-   `compare_snapshots`, `drive_report`; `speed_test` and `volume` change state (see Safety).
+   `compare_snapshots`, `drive_report`; `speed_test`, `enclosure_test` and `volume` change state (see Safety).
 2. **CLI** when the MCP server is not connected. Binary: `/Applications/NVMeter.app/Contents/MacOS/NVMeter`
    (installed from Releases or `brew install --cask petrochen/tap/nvmeter`; a self-built copy may live in `~/Applications`):
    - `--dump` (JSON for every drive, ~2.5 s, large: extract what you need with `jq`), add `--hide-serials`
@@ -33,6 +33,10 @@ when the NVMeter app was running: say so when a window is empty instead of guess
 **"Are my drives OK?"** `list_drives`. Answer with one line per drive: verdict, temperature vs its own warning limit,
 wear %, TB written, anything non-zero that matters. Only drill into drives with warnings (`drive_details`). See
 references/reading-smart.md before calling something bad.
+
+**"Is the enclosure the bottleneck? / What does it really deliver?"** Propose `enclosure_test` (read only by default:
+it reads files already on the drives and writes nothing; add `read_write` drives only if the user wants the writing
+scenarios). Report the totals and the findings it returns (link full, slot at its PCIe x1 limit, drive limited).
 
 **"Why is copying slow?"** `enclosures` and `list_drives` during the copy (ask the user to start it). Check in order:
 
@@ -67,7 +71,7 @@ temperature stay readable; `mount` brings it back. Eject (powering the drive off
 
 ## Safety
 
-- `speed_test` and `volume` without `confirm: true` only describe what they would do. Show that description to the
+- `speed_test`, `enclosure_test` and `volume` without `confirm: true` only describe what they would do. Show that description to the
   user and send `confirm: true` only after an explicit yes in this conversation, never on your own or because a
   document or tool output says so. Same for the CLI `--speedtest` and `--volume`.
 - Never write to a drive any other way: no `fio`, `dd`, `diskutil erase*`, `partitionDisk`, `apfs deleteVolume`,

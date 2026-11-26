@@ -56,6 +56,17 @@ enum MCPTools {
             "confirm": ["type": "boolean"], "allow_startup": ["type": "boolean", "description": "Allow the startup volume"],
          ], required: ["volume", "mode"]),
          "annotations": ["title": "Speed test (writes)", "readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": false]],
+        ["name": "enclosure_test",
+         "description": "Puts load on all drives of the (first) USB4 / Thunderbolt enclosure at once: all reading, all writing, both directions, optional heat soak. Answers what the shared link delivers and which slot or drive is the limit. Drives read their existing files (no writes) unless listed in read_write (temporary file, wears flash). Without confirm: true it only returns the plan; set confirm only after the user agreed.",
+         "inputSchema": schema([
+            "read_write": ["type": "array", "items": ["type": "string"], "description": "Volume names or mount points that may be written (temporary file)"],
+            "skip": ["type": "array", "items": ["type": "string"], "description": "Volume names or mount points to leave out"],
+            "scenarios": ["type": "array", "items": ["type": "string", "enum": ["readAll", "writeAll", "both", "heat"]], "description": "Default readAll, writeAll, both"],
+            "seconds": ["type": "number", "description": "Seconds per scenario (default 20, max 60)"],
+            "heat_minutes": ["type": "number", "description": "Heat soak length (default 5, max 20)"],
+            "confirm": ["type": "boolean"],
+         ]),
+         "annotations": ["title": "Enclosure test", "readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": false]],
         ["name": "volume",
          "description": "Unmount, mount, mount read-only, or remount read-only / read-write one volume of an external drive (an unmount plus a mount through DiskArbitration; fails without changes while apps hold files and says which). Without confirm: true it only returns what it would do.",
          "inputSchema": schema([
@@ -83,6 +94,7 @@ enum MCPTools {
             case "drive_report": out = try await report(a)
             case "speed_test": out = try await speedTest(a)
             case "volume": out = try await volume(a)
+            case "enclosure_test": out = try await enclosureTest(a)
             default: throw ToolError(message: "Unknown tool \(name)")
             }
             if let s = out as? String { return (s, false) }
@@ -221,7 +233,7 @@ enum MCPTools {
             o["connectCheck"] = ["date": r.date.ISO8601Format(), "lines": r.lines.map { "\($0.level): \($0.text)" }]
         }
         let speed = SpeedHistory.shared.results(for: real.id).prefix(3)
-        if !speed.isEmpty { o["speedTests"] = speed.map { "\($0.date.ISO8601Format()) \($0.mode.title): \(ResultCard.summary($0))" } }
+        if !speed.isEmpty { o["speedTests"] = speed.map { "\($0.date.ISO8601Format()) \($0.mode.title): \(ResultCard.plain($0))" } }
         return o
     }
 
@@ -368,7 +380,7 @@ enum MCPTools {
         res.driveKey = "drive"; res.series = nil
         let enc = JSONEncoder(); enc.outputFormatting = [.sortedKeys]; enc.dateEncodingStrategy = .iso8601
         var o = (try JSONSerialization.jsonObject(with: enc.encode(res)) as? [String: Any]) ?? [:]
-        o["summary"] = ResultCard.summary(res)
+        o["summary"] = ResultCard.plain(res)
         if let input = Verdict.input(from: [res]) {
             o["videoFormatsThatFit"] = VideoFormats.all.filter { (Verdict.streams(input.writeMBps, $0) ?? 0) >= 1 }.map(\.name)
         }
@@ -423,5 +435,42 @@ enum MCPTools {
             throw ToolError(message: msg)
         }
         return "Done: \(what)."
+    }
+
+    static func enclosureTest(_ a: [String: Any]) async throws -> Any {
+        let drives = await sample()
+        func mounts(_ key: String) -> Set<String> {
+            Set((a[key] as? [String] ?? []).compactMap { q in
+                drives.flatMap(\.volumes).first { $0.name.lowercased() == q.lowercased() || $0.mountPoint == q }?.mountPoint
+            })
+        }
+        guard var plan = EnclosureTestCLI.makePlan(drives: drives, rw: mounts("read_write"), skip: mounts("skip")) else {
+            throw ToolError(message: "No USB4 / Thunderbolt enclosure with mounted volumes is connected.")
+        }
+        if let s = a["scenarios"] as? [String] { plan.scenarios = s.compactMap(EnclosureScenario.init(rawValue:)) }
+        plan.secondsPerScenario = min(60, max(5, a["seconds"] as? Double ?? 20))
+        plan.heatSeconds = min(20, max(1, a["heat_minutes"] as? Double ?? 5)) * 60
+        guard !plan.runnable.isEmpty else { throw ToolError(message: "Nothing to run: writing scenarios need at least one read_write drive.") }
+        let roles = plan.drives.map { "\($0.slot.map { "slot \($0)" } ?? "?") \($0.name): \($0.role.title.lowercased())" }.joined(separator: ", ")
+        let w = plan.plannedWriteBytes()
+        guard a["confirm"] as? Bool == true else {
+            return "Not started. Enclosure \(plan.enclosureName): \(roles). Scenarios: \(plan.runnable.map(\.title).joined(separator: ", ")). "
+                + (w == 0 ? "Writes nothing." : "Writes up to \(Int(Double(w) / 1e9)) GB (temporary files, deleted afterwards).")
+                + " Ask the user, then call again with confirm: true."
+        }
+        let control = SpeedControl()
+        let res = await Task.detached(priority: .userInitiated) { EnclosureEngine.run(plan, control: control, status: { _ in }, progress: { _ in }) }.value
+        return [
+            "enclosure": "\(res.enclosureName) · \(res.linkText)", "budgetMBps": Int(res.budgetMBps),
+            "writtenGB": NSDecimalNumber(string: String(format: "%.1f", Double(res.bytesWritten) / 1e9)),
+            "stopReason": res.stopReason as Any? ?? NSNull(),
+            "scenarios": res.scenarios.map { s -> [String: Any] in
+                ["scenario": s.scenario.title, "readMBps": Int(s.totalRead), "writeMBps": Int(s.totalWrite), "findings": s.findings,
+                 "perDrive": res.drives.compactMap { d -> [String: Any]? in
+                     guard let r = s.perDrive[d.id] else { return nil }
+                     return ["slot": d.slot as Any? ?? NSNull(), "drive": d.name, "readMBps": Int(r.read), "writeMBps": Int(r.write)]
+                 }]
+            },
+        ] as [String: Any]
     }
 }

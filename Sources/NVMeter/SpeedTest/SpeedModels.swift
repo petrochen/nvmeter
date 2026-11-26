@@ -35,6 +35,8 @@ struct SpeedSample: Identifiable, Sendable {
     /// Live loop only: cycle number (from 1) and bytes written in the whole run so far.
     var cycle = 0
     var totalWritten: Int64 = 0
+    /// True every `SpeedEngine.sampleInterval`: the sample also becomes a chart point. Other samples only move the dials.
+    var chart = true
 }
 
 /// One write + read pass of the live loop.
