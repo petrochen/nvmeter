@@ -8,8 +8,8 @@ It tells you whether a drive is healthy and how hot it runs. It shows which slot
 and what that slot's link can carry, and why a copy is slow. It also remembers what happened to a drive while it was
 plugged into someone else's Mac.
 
-It is a native Mac app (Swift, SwiftUI), free and open source under the GPL-3.0. It needs no sudo, no kernel
-extension and no helper, and reads everything through public macOS APIs.
+It is a native Mac app (Swift, SwiftUI), free and open source under the MIT license. It needs no sudo, no
+kernel extension and no helper, and reads everything through public macOS APIs.
 
 ![Drive overview](docs/screenshots/drive.png)
 
@@ -344,6 +344,5 @@ prints JSON (`--seconds` is the time limit of a live loop, `--max-gb` its write 
 
 ## License
 
-GPL-3.0, see [LICENSE](LICENSE). You may use, study, change and share NVMeter; if you distribute a changed version,
-it has to stay open under the same license. Versions up to 0.9.1 were released under the MIT license and remain
-available under it. Bundled Simple Icons logos are CC0.
+MIT, see [LICENSE](LICENSE). Contributions are welcome, including AI-assisted ones: see
+[CONTRIBUTING.md](CONTRIBUTING.md). Bundled Simple Icons logos are CC0.

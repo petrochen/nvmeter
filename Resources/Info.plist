@@ -25,6 +25,6 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
-	<string>© 2026 Alex Petrochenko. Free software under the GNU GPL v3.</string>
+	<string>© 2026 Alex Petrochenko. MIT license.</string>
 </dict>
 </plist>
