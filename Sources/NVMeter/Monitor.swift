@@ -79,7 +79,8 @@ final class Monitor {
         if snaps != drives { drives = snaps }
         alerts.evaluate(snaps, now: now)
         ExtraAlerts.shared.evaluate(snaps, raidSets: raidSets, center: alerts)
-if refreshedSMART { SnapshotStore.autoSnapshot(snaps) }
+        ConnectCheck.shared.evaluate(snaps, now: now)      // before autoSnapshot: a brand new drive has no snapshot yet
+        if refreshedSMART { SnapshotStore.autoSnapshot(snaps) }
         LinkMemory.shared.observe(snaps)
         if !EnclosureTopology.isValidSelection(selection, drives: snaps) { selection = snaps.first?.id }
     }

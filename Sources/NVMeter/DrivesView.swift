@@ -162,6 +162,7 @@ struct DriveDetail: View {
             Label("Read  \(Fmt.rate(drive.throughput.readMBps))", systemImage: "arrow.down.circle")
             Label("Write  \(Fmt.rate(drive.throughput.writeMBps))", systemImage: "arrow.up.circle")
         }.font(.callout.monospacedDigit())
+        if let report = ConnectCheck.shared.reports[drive.id] { ConnectReportCard(report: report) }
         volumes
         ForEach(drive.warnings, id: \.self) { message in
             if drive.isUSBOther && message.contains("SMART unavailable") {

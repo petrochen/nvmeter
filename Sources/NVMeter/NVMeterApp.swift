@@ -35,10 +35,17 @@ struct SettingsView: View {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        guard !CommandLine.arguments.contains("--screenshot") else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { MainActor.assumeIsolated { LoginItem.offerOnce() } }
+    }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         !UserDefaults.standard.bool(forKey: AlertKeys.keepRunning)
     }
-    func applicationWillTerminate(_ notification: Notification) { HistoryStore.shared.flush() }
+    func applicationWillTerminate(_ notification: Notification) {
+        HistoryStore.shared.flush()
+        MainActor.assumeIsolated { ConnectCheck.shared.save() }
+    }
 }
 
 struct NVMeterApp: App {
