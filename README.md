@@ -16,6 +16,12 @@ Swift + SwiftUI + Swift Charts, one self-contained `.app`, no runtime dependenci
   bandwidth budget with live read / write bars and "why is it slow?" hints (enclosure saturated vs slot link limit).
 - **Graphs**: temperature and read / write MB/s per drive and in total, 5 min to 30 days from a local history
   database, hover crosshair with exact values.
+- **Connect check**: every time a drive connects (or is found when NVMeter starts) its SMART is compared with the
+  state from its previous visit: how long it was away, data written / read and hours powered on elsewhere, unsafe
+  shutdowns (told apart: pulled while mounted, or an enclosure that cuts power after a clean eject), new media errors,
+  wear, spare, time above the warning temperature, a USB fallback or a changed connection. The result is on the
+  drive's Overview and in Events, a SMART snapshot is saved, and a notification is posted only when something needs
+  attention or the drive was used elsewhere.
 - **Menu bar** item with the hottest temperature and a drive list; **alerts** for overheating, SMART counters
   getting worse, a PCIe link or USB4 → USB downgrade, degraded RAID sets; an **Events** log; launch at login.
 - **Reports** (PDF / JSON / Markdown) for warranty claims, resale or forum posts, and SMART **snapshots** with
@@ -173,6 +179,9 @@ Tests                      parser tests (swift test)
 - Alerts (Settings > Alerts, each rule has its own switch): temperature near the drive's warning threshold (offset,
   3 degree hysteresis, 30 minute cooldown), critical temperature, SMART counters getting worse, PCIe link or USB4
   fallback downgrades, and drives vanishing with mounted volumes. The last 200 events are on the Events tab.
+- Connect check state lives in `~/Library/Application Support/NVMeter/connect-check.json` (last visit and latest
+  report per drive). Gaps under 2 minutes are treated as reconnect blips. Checks only happen while NVMeter runs, so on
+  the first launch it offers to start at login (asked once; Settings has the switch).
 - `NVMeter --test-alerts` posts one test notification per rule; `--test-login-item` registers and unregisters the
   login item and prints the status of each step.
 

@@ -107,14 +107,15 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
     }
 
     @discardableResult
-    func post(_ rule: AlertRule, _ sev: AlertSeverity, drive: String, driveID: String?, title: String, body: String, persist: Bool = true) -> AlertEvent {
+    func post(_ rule: AlertRule, _ sev: AlertSeverity, drive: String, driveID: String?, title: String, body: String, persist: Bool = true,
+              notify: Bool = true) -> AlertEvent {
         let ev = AlertEvent(date: Date(), rule: rule, severity: sev, drive: drive, title: title, body: body, driveID: driveID)
         if persist {
             events.insert(ev, at: 0)
             if events.count > Self.maxEvents { events.removeLast(events.count - Self.maxEvents) }
             saveEvents()
         }
-        if UserDefaults.standard.bool(forKey: AlertKeys.system), Self.canNotify {
+        if notify, UserDefaults.standard.bool(forKey: AlertKeys.system), Self.canNotify {
             let c = UNMutableNotificationContent()
             c.title = title; c.body = body
             c.sound = sev == .critical ? .defaultCritical : .default

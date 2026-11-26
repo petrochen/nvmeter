@@ -79,6 +79,27 @@ enum LoginItem {
         } catch { return error.localizedDescription }
     }
 
+    static let askedKey = "onboarding.loginItemAsked"
+
+    /// First launch only: drive checks happen while NVMeter runs, so offer to start it at login. Asked once.
+    @MainActor static func offerOnce() {
+        let d = UserDefaults.standard
+        guard !d.bool(forKey: askedKey) else { return }
+        d.set(true, forKey: askedKey)
+        guard status != .enabled else { return }
+        let a = NSAlert()
+        a.messageText = "Start NVMeter at login?"
+        a.informativeText = "NVMeter checks every drive when it connects (unsafe shutdowns, use on other computers, new errors) "
+            + "and records temperature history, but only while it runs. It lives in the menu bar and uses very little CPU. "
+            + "You can change this later in Settings."
+        a.addButton(withTitle: "Start at Login")
+        a.addButton(withTitle: "Not Now")
+        AppLifecycle.shared.bringToFront()
+        if a.runModal() == .alertFirstButtonReturn, let err = set(true) {
+            let e = NSAlert(); e.messageText = "Could not add the login item"; e.informativeText = err; e.runModal()
+        }
+    }
+
     /// `NVMeter --test-login-item`: registers, reads the status, unregisters again and reports each step.
     static func selfTest() {
         print("Status before: \(statusText)")
