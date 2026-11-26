@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 144" width="1024" height="1024">
+  <rect x="6" y="6" width="132" height="132" rx="29" fill="#e8ede7"/>
+  <g transform="translate(10.5 45)">
+    <rect x="112" y="5" width="11" height="27" rx="2" fill="#e9b052"/>
+    <rect x="112" y="37" width="11" height="12" rx="2" fill="#e9b052"/>
+    <rect x="114" y="11" width="9" height="1" rx="0" fill="#936b36"/>
+    <rect x="114" y="17" width="9" height="1" rx="0" fill="#936b36"/>
+    <rect x="114" y="23" width="9" height="1" rx="0" fill="#936b36"/>
+    <rect x="114" y="29" width="9" height="1" rx="0" fill="#936b36"/>
+    <rect x="114" y="43" width="9" height="1" rx="0" fill="#936b36"/>
+    <path fill="#214a42" d="M8 0H108Q116 0 116 8V46Q116 54 108 54H8Q0 54 0 46V35A8 8 0 0 0 0 19V8Q0 0 8 0Z"/>
+    <rect x="16" y="7" width="89" height="40" rx="5" fill="#192e2a"/>
+    <rect x="23" y="26" width="7" height="7" rx="2" fill="#90bca2"/>
+    <rect x="35" y="23" width="7" height="10" rx="2" fill="#90bca2"/>
+    <rect x="47" y="18" width="7" height="15" rx="2" fill="#90bca2"/>
+    <rect x="59" y="11" width="7" height="22" rx="2" fill="#90bca2"/>
+    <rect x="71" y="8" width="7" height="25" rx="2" fill="#f4cb76"/>
+    <rect x="83" y="15" width="7" height="18" rx="2" fill="#90bca2"/>
+  </g>
+</svg>
