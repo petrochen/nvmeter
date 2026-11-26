@@ -28,4 +28,5 @@ if CommandLine.arguments.contains("--speedtest-selftest") {
     SpeedCLI.selfTest()
     exit(0)
 }
+if CommandLine.arguments.contains("--volume") { MountCLI.run() }
 NVMeterApp.main()

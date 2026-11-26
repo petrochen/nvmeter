@@ -72,7 +72,8 @@ final class EjectController {
     struct Failure: Sendable {
         var code: Int32
         var message: String
-        var busy: Bool { code == Int32(truncatingIfNeeded: kDAReturnBusy) }          
+        /// DiskArbitration's own "busy", or the file system's EBUSY wrapped as unix_err(EBUSY) = 0xc010.
+        var busy: Bool { code == Int32(truncatingIfNeeded: kDAReturnBusy) || code == 0xC000 | EBUSY }
         var notEjectable: Bool { code == Int32(truncatingIfNeeded: kDAReturnNotPermitted) || code == Int32(truncatingIfNeeded: kDAReturnUnsupported) } // not permitted / unsupported
     }
 

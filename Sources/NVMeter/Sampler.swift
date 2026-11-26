@@ -85,6 +85,7 @@ final class Sampler: @unchecked Sendable {
             warnings: warnings, health: health, attributes: rows,
             vendor: nil, bridgeChip: d.connection.kind == "usb" ? VendorCatalog.bridgeChip(model: d.model) : nil)
         snap.interface = snap.interfaceDescription
+        snap.unmountedVolumes = d.unmounted
         if snap.bridgeChip == nil {
             snap.vendor = VendorCatalog.identify(vid: ident?.pciVendorID, ssvid: ident?.subsystemVendorID, model: snap.model)
         }

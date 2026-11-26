@@ -80,6 +80,8 @@ struct VolumeInfo: Codable, Equatable, Sendable, Identifiable {
     var fileSystem: String?
     var sizeBytes: UInt64
     var freeBytes: UInt64
+    /// Mounted read-only (always false for unmounted volumes).
+    var readOnly = false
     var id: String { bsdName }
 }
 
@@ -152,6 +154,8 @@ struct DriveSnapshot: Codable, Equatable, Sendable, Identifiable {
     var raidSetID: String? = nil
     /// User-chosen name (stored by drive key in the history database).
     var customName: String?
+    /// Volumes with a file system that are not mounted (external drives only), so they can be mounted again.
+    var unmountedVolumes: [VolumeInfo] = []
 
     /// USB disk without SMART, or one that only shows its bridge chip: not a real drive model.
     var isUSBOther: Bool { connection.kind == "usb" && (bridgeChip != nil || !smartCapable) }
