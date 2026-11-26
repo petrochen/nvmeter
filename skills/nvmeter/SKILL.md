@@ -14,8 +14,8 @@ interpreted data, and history exists nowhere else.
 
 1. **MCP tools** (server `nvmeter`): `list_drives` first, then `drive_details`, `history`, `events`, `enclosures`,
    `compare_snapshots`, `drive_report`; `speed_test` and `volume` change state (see Safety).
-2. **CLI** when the MCP server is not connected. Binary: `~/Applications/NVMeter.app/Contents/MacOS/NVMeter`
-   (or `/Applications/...`):
+2. **CLI** when the MCP server is not connected. Binary: `/Applications/NVMeter.app/Contents/MacOS/NVMeter`
+   (installed from Releases or `brew install --cask petrochen/tap/nvmeter`; a self-built copy may live in `~/Applications`):
    - `--dump` (JSON for every drive, ~2.5 s, large: extract what you need with `jq`), add `--hide-serials`
    - `--report <diskN|all> --format md|json|pdf --out <path> --hide-serials`
    - `--snapshot <diskN|all>`, `--compare <diskN> [<snapA> [<snapB>]]`

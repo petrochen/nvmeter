@@ -174,7 +174,7 @@ binary. It gives an agent compact, joined answers instead of six tools' raw outp
 about 4 KB versus 33 KB for `--dump`), plus what only NVMeter has: history, events, connect checks and SMART snapshots.
 
 ```sh
-claude mcp add --scope user nvmeter -- ~/Applications/NVMeter.app/Contents/MacOS/NVMeter --mcp
+claude mcp add --scope user nvmeter -- /Applications/NVMeter.app/Contents/MacOS/NVMeter --mcp
 ```
 
 | Tool | What it returns |
@@ -199,7 +199,7 @@ been running. Speed tests run from MCP are not added to the app's history.
 `skills/nvmeter` is a skill for Claude Code and Codex: when to use NVMeter, recipes for the usual questions (health,
 slow copies, throttling, video work, warranty reports, protecting archives), how to read SMART and enclosure numbers
 (`references/reading-smart.md`) and the safety rules. `make install-skill` copies it to `~/.claude/skills` and
-`~/.codex/skills`. Codex MCP: `codex mcp add nvmeter -- ~/Applications/NVMeter.app/Contents/MacOS/NVMeter --mcp`.
+`~/.codex/skills`. Codex MCP: `codex mcp add nvmeter -- /Applications/NVMeter.app/Contents/MacOS/NVMeter --mcp`.
 
 ## Footprint
 
