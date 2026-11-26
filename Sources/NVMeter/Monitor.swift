@@ -14,6 +14,7 @@ final class Monitor {
     var selection: String?
     var tab: AppTab = .drives
     var lastTick = Date()
+    let speedRunner = SpeedTestRunner()
     let alerts = AlertCenter.shared
     /// Screenshot mode only: pretend the cursor hovers this many seconds before "now".
     var simulatedHoverAge: TimeInterval?

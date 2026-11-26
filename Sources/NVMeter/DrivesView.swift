@@ -70,52 +70,139 @@ struct DriveDetail: View {
     @Environment(Monitor.self) private var monitor
     @AppStorage("hideSerials") private var hideSerials = false
 
+    private enum SectionTab: String, CaseIterable { case overview = "Overview", history = "History", speed = "Speed Test" }
+    @State private var section = SectionTab.overview
+    @State private var hover: HoverState?
+    private let interval: TimeInterval = 1800
+    private var warning: Int { drive.identify?.warningTempC ?? HealthEvaluator.fallbackWarnC }
+    private var critical: Int { drive.identify?.criticalTempC ?? HealthEvaluator.fallbackCritC }
+
     var body: some View {
-        ScrollViewReader { proxy in
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                header
-                ForEach(drive.warnings, id: \.self) { w in
-                    Label(w, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange).padding(10).frame(maxWidth: .infinity, alignment: .leading)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.12)))
-                }
-                info
-                if drive.smart != nil { totals }
-                if drive.smart != nil { UsageSection(drive: drive).id("usage") }
-                volumes
-                EjectControls(drives: [drive], ejectTitle: "Eject", sheetTitle: drive.displayName)
-                if !drive.attributes.isEmpty { attributes }
+        VStack(alignment: .leading, spacing: 0) {
+            header.padding([.horizontal, .top], 20)
+            Picker("Drive section", selection: $section) {
+                ForEach(SectionTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
             }
-            .padding(20)
-        }
-        .onChange(of: monitor.scrollToUsage) { _, v in if v { proxy.scrollTo("usage", anchor: .top) } }
+            .pickerStyle(.segmented).labelsHidden().fixedSize().padding(.horizontal, 20).padding(.vertical, 12)
+            Divider()
+            if section == .speed {
+                SpeedTestView(scopedDrive: drive)
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 14) {
+                            if section == .history {
+                                if drive.temperatureC != nil || !monitor.temps(drive.id, window: interval).isEmpty { temperature }
+                                events
+                            } else {
+                                overview
+                            }
+                        }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .onChange(of: monitor.scrollToUsage) { _, show in
+                        if show { section = .overview; proxy.scrollTo("usage", anchor: .top) }
+                    }
+                }
+            }
         }
     }
 
+    private var enclosure: EnclosureTopology.Enclosure? {
+        let layout = EnclosureTopology.build(monitor.drives, showOthers: true)
+        return layout.enclosures.first { $0.id == EnclosureTopology.selectionID(for: drive) }
+    }
+
+    private var location: String {
+        if let enclosure,
+           let slot = enclosure.slots.first(where: { $0.id == drive.id }) {
+            return [enclosure.name, slot.number.map { "Slot \($0)" }].compactMap { $0 }.joined(separator: " / ")
+        }
+        return drive.isUSBOther ? drive.subtitle : drive.connection.summary
+    }
+
     private var header: some View {
-        HStack(alignment: .top, spacing: 16) {
-            HealthTile(title: "Health Status", value: drive.health.title,
-                       subtitle: drive.smart.map { "Wear \($0.percentageUsed) %" } ?? drive.ata?.identity.kind ?? "SMART unavailable",
-                       color: drive.health.color)
-            let t = drive.temperatureC
-            let ts = t.map { HealthEvaluator.tempStatus($0, warn: drive.identify?.warningTempC, crit: drive.identify?.criticalTempC) } ?? .unknown
-            HealthTile(title: "Temperature", value: Fmt.temp(t),
-                       subtitle: drive.identify?.warningTempC.map { "warn \($0) °C · crit \(drive.identify?.criticalTempC ?? 0) °C" },
-                       color: ts.color)
+        HStack(spacing: 14) {
+            if let enclosure, enclosure.slots.count > 1 {
+                HStack(spacing: 3) {
+                    ForEach(enclosure.slots) { slot in
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(slot.id == drive.id ? Color.orange : Color.secondary.opacity(0.45))
+                            .frame(width: 6, height: 23)
+                    }
+                }.padding(6).background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+                    .accessibilityHidden(true)
+            } else {
+                VendorLogo(vendor: drive.vendor, height: 38)
+            }
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 10) {
-                    VendorLogo(vendor: drive.vendor, height: 34)
-                    Text(drive.displayName).font(.title2.weight(.semibold))
-                }
-                Text(drive.isUSBOther ? drive.subtitle : drive.model).foregroundStyle(.secondary)
-                Text("/dev/\(drive.bsdName) · \(Fmt.capacity(drive.capacityBytes))").font(.caption).foregroundStyle(.secondary)
-                HStack(spacing: 14) {
-                    Label(Fmt.rate(drive.throughput.readMBps), systemImage: "arrow.down.circle").foregroundStyle(.blue)
-                    Label(Fmt.rate(drive.throughput.writeMBps), systemImage: "arrow.up.circle").foregroundStyle(.orange)
-                }.font(.callout.monospacedDigit()).padding(.top, 6)
+                Text(drive.displayName).font(.largeTitle.weight(.semibold)).textSelection(.enabled)
+                Text(location).font(.headline).foregroundStyle(.secondary)
             }
             Spacer()
+            if drive.health != .unknown {
+                HStack { StatusDot(status: drive.health); Text("SMART · \(drive.health.title)") }
+            }
+        }
+    }
+
+    @ViewBuilder private var overview: some View {
+        if let t = drive.temperatureC {
+            if t >= warning || t >= critical {
+                let threshold = t >= critical ? critical : warning
+                HStack {
+                    Label("Temperature \(t) °C · \(t >= critical ? "critical" : "warning") threshold \(threshold) °C",
+                          systemImage: "exclamationmark.triangle.fill")
+                    Spacer()
+                    Button("View history") { section = .history }
+                }.padding(10).background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+            }
+            temperature
+        }
+        HStack(spacing: 20) {
+            Label("Read  \(Fmt.rate(drive.throughput.readMBps))", systemImage: "arrow.down.circle")
+            Label("Write  \(Fmt.rate(drive.throughput.writeMBps))", systemImage: "arrow.up.circle")
+        }.font(.callout.monospacedDigit())
+        volumes
+        ForEach(drive.warnings, id: \.self) { message in
+            if drive.isUSBOther && message.contains("SMART unavailable") {
+                Label(message, systemImage: "info.circle").foregroundStyle(.secondary)
+            } else {
+                Label(message, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+            }
+        }
+        EjectControls(drives: [drive], ejectTitle: "Eject", sheetTitle: drive.displayName)
+        info
+        if drive.smart != nil { totals; UsageSection(drive: drive).id("usage") }
+        if !drive.attributes.isEmpty { attributes }
+    }
+
+    private var temperature: some View {
+        let points = monitor.temps(drive.id, window: interval)
+        return Card("Temperature") {
+            HStack(alignment: .firstTextBaseline, spacing: 18) {
+                Text(Fmt.temp(drive.temperatureC)).font(.title.bold().monospacedDigit())
+                if let peak = points.map(\.c).max() { Text("30 min peak  \(Int(peak)) °C") }
+                Text("Warning at \(warning) °C")
+                Spacer()
+                if section == .overview { Button("View history") { section = .history }.buttonStyle(.link) }
+            }
+            TempChart(points: points, now: monitor.lastTick, window: interval, warn: warning,
+                      crit: section == .history ? critical : nil, hover: hover, onHover: { hover = $0 },
+                      showLabel: true, values: { monitor.hoverValues(at: $0, id: drive.id, window: interval) })
+                .frame(height: section == .history ? 190 : 96)
+        }
+    }
+
+    private var events: some View {
+        let recent = monitor.alerts.events.filter { $0.driveID == drive.id }
+        return Card("Drive events") {
+            if recent.isEmpty { Text("No recorded events for this drive.").foregroundStyle(.secondary) }
+            ForEach(recent) { event in
+                HStack(alignment: .firstTextBaseline) {
+                    Text(event.date.formatted(date: .abbreviated, time: .shortened)).foregroundStyle(.secondary)
+                    VStack(alignment: .leading) { Text(event.title).bold(); Text(event.body).font(.caption) }
+                }
+            }
         }
     }
 

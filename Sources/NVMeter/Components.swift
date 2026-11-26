@@ -42,23 +42,6 @@ struct StatusDot: View {
     }
 }
 
-/// Big CrystalDiskInfo-style status tile.
-struct HealthTile: View {
-    let title: String
-    let value: String
-    let subtitle: String?
-    let color: Color
-    var body: some View {
-        VStack(spacing: 4) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
-            Text(value).font(.system(size: 30, weight: .bold, design: .rounded)).foregroundStyle(.white)
-            if let subtitle { Text(subtitle).font(.caption2).foregroundStyle(.white.opacity(0.85)) }
-        }
-        .frame(width: 150, height: 96)
-        .background(RoundedRectangle(cornerRadius: 12).fill(color.gradient))
-    }
-}
-
 struct Card<Content: View>: View {
     let title: String?
     @ViewBuilder var content: Content
