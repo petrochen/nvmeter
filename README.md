@@ -125,10 +125,18 @@ set status, the NVMe self-test log, light and dark mode, and a "hide serial numb
 
 ## Install
 
-Build it from source (see [Build and run](#build-and-run)): `make app` gives `build/NVMeter.app`, copy it to
-Applications. The app is ad-hoc signed, not notarized: on first launch right-click it and choose Open, and allow
-notifications in System Settings if you want alerts. NVMeter offers to start at login on first launch, since the
-connect checks and history only happen while it runs.
+Download `NVMeter-<version>.zip` from [Releases](https://github.com/petrochen/nvmeter/releases/latest), unzip it and
+move NVMeter to Applications. Or with Homebrew:
+
+```bash
+brew trust petrochen/tap      # Homebrew asks once before loading casks from a third-party tap
+brew install --cask petrochen/tap/nvmeter
+```
+
+The app is universal (Apple silicon and Intel), needs macOS 14 or later, and is signed with Developer ID (ESCUDIX
+LTD) and notarized by Apple, so it opens like any other app. Allow notifications if you want alerts. NVMeter offers
+to start at login on first launch, since connect checks and history are only recorded while it runs. To build it
+yourself, see [Build and run](#build-and-run).
 
 ## Read-only, no privileges
 
