@@ -14,6 +14,8 @@ final class Monitor {
     var selection: String?
     var tab: AppTab = .drives
     var lastTick = Date()
+    /// Set after a mount / unmount so the next tick re-reads volumes instead of waiting for the SMART interval.
+    @ObservationIgnored var forceRefresh = false
     let speedRunner = SpeedTestRunner()
     let alerts = AlertCenter.shared
     /// Screenshot mode only: pretend the cursor hovers this many seconds before "now".
@@ -46,7 +48,9 @@ final class Monitor {
             while !Task.isCancelled {
                 let d = UserDefaults.standard.double(forKey: "smartInterval")
                 sampler.smartInterval = d >= 1 ? d : 5
-                let (snaps, sets) = await Task.detached(priority: .utility) { (sampler.tick(), sampler.extras.raidSets) }.value
+                let full = self?.forceRefresh ?? false
+                self?.forceRefresh = false
+                let (snaps, sets) = await Task.detached(priority: .utility) { (sampler.tick(full: full), sampler.extras.raidSets) }.value
                 let refreshed = sampler.lastTickRefreshed
                 if sets != self?.raidSets { self?.raidSets = sets }
                 self?.apply(snaps, refreshedSMART: refreshed)
@@ -79,7 +83,9 @@ final class Monitor {
         if snaps != drives { drives = snaps }
         alerts.evaluate(snaps, now: now)
         ExtraAlerts.shared.evaluate(snaps, raidSets: raidSets, center: alerts)
-        ConnectCheck.shared.evaluate(snaps, now: now)      // before autoSnapshot: a brand new drive has no snapshot yet
+        ConnectCheck.shared.evaluate(snaps, now: now)
+        MountController.shared.monitor = self
+        MountController.shared.enforce(snaps, now: now)      // before autoSnapshot: a brand new drive has no snapshot yet
         if refreshedSMART { SnapshotStore.autoSnapshot(snaps) }
         LinkMemory.shared.observe(snaps)
         if !EnclosureTopology.isValidSelection(selection, drives: snaps) { selection = snaps.first?.id }

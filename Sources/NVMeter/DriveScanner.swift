@@ -24,6 +24,7 @@ final class DriveDevice: @unchecked Sendable {
     var link: PCIeLink?
     var connection: ConnectionInfo
     var volumes: [VolumeInfo] = []
+    var unmounted: [VolumeInfo] = []
 
     init(key: UInt64, device: RegEntry, driver: RegEntry, media: RegEntry, bsdName: String, model: String, serial: String,
          firmware: String, capacity: UInt64, interconnect: String, location: String, smartCapable: Bool) {
@@ -126,7 +127,7 @@ final class DriveScanner: @unchecked Sendable {
         let ancestors = d.device.ancestors()
         d.link = Self.pcieLink(ancestors: ancestors)
         d.connection = Self.connection(for: d, ancestors: ancestors)
-        d.volumes = volumes(for: d)
+        (d.volumes, d.unmounted) = volumes(for: d)
     }
 
     // MARK: PCIe link
@@ -213,30 +214,45 @@ final class DriveScanner: @unchecked Sendable {
 
     /// Volumes live below the whole-disk media. For APFS the container disk is a descendant of the physical store
     /// ("APFS Physical Store" diskNs2 -> AppleAPFSContainerScheme -> synthesized diskM), so one traversal covers both.
-    func volumes(for d: DriveDevice) -> [VolumeInfo] {
-        guard let session = daSession else { return [] }
-        var out: [VolumeInfo] = []
+    /// Mounted volumes, and (external drives only) volumes with a file system that are not mounted.
+    func volumes(for d: DriveDevice) -> (mounted: [VolumeInfo], unmounted: [VolumeInfo]) {
+        guard let session = daSession else { return ([], []) }
+        var out: [VolumeInfo] = [], idle: [VolumeInfo] = []
         var seen = Set<String>()
         for m in d.media.descendants(maxDepth: 8) where m.conforms("IOMedia") {
             guard let bsd = m.string("BSD Name"), !seen.contains(bsd),
                   let disk = DADiskCreateFromBSDName(kCFAllocatorDefault, session, bsd),
-                  let desc = DADiskCopyDescription(disk) as? [String: Any],
-                  let url = desc[kDADiskDescriptionVolumePathKey as String] as? URL else { continue }
+                  let desc = DADiskCopyDescription(disk) as? [String: Any] else { continue }
+            guard let url = desc[kDADiskDescriptionVolumePathKey as String] as? URL else {
+                let name = (desc[kDADiskDescriptionVolumeNameKey as String] as? String) ?? ""
+                if d.connection.kind != "internal", desc[kDADiskDescriptionVolumeMountableKey as String] as? Bool == true,
+                   let kind = desc[kDADiskDescriptionVolumeKindKey as String] as? String,
+                   !Self.systemVolumeNames.contains(name) {
+                    seen.insert(bsd)
+                    idle.append(VolumeInfo(name: name.isEmpty ? bsd : name, bsdName: bsd, mountPoint: "", fileSystem: kind,
+                                           sizeBytes: (desc[kDADiskDescriptionMediaSizeKey as String] as? NSNumber)?.uint64Value ?? 0, freeBytes: 0))
+                }
+                continue
+            }
             seen.insert(bsd)
             let path = url.path
             if Self.hiddenMounts.contains(path) { continue }
             let rv = try? url.resourceValues(forKeys: [.volumeTotalCapacityKey, .volumeAvailableCapacityForImportantUsageKey,
-                                                      .volumeAvailableCapacityKey])
+                                                      .volumeAvailableCapacityKey, .volumeIsReadOnlyKey])
             let total = UInt64(rv?.volumeTotalCapacity ?? 0)
             let free = UInt64(max(0, rv?.volumeAvailableCapacityForImportantUsage ?? Int64(rv?.volumeAvailableCapacity ?? 0)))
             out.append(VolumeInfo(
                 name: (desc[kDADiskDescriptionVolumeNameKey as String] as? String) ?? url.lastPathComponent,
                 bsdName: bsd, mountPoint: path,
                 fileSystem: desc[kDADiskDescriptionVolumeKindKey as String] as? String,
-                sizeBytes: total, freeBytes: free))
+                sizeBytes: total, freeBytes: free, readOnly: rv?.volumeIsReadOnly ?? false))
         }
         // The sealed system volume "/" and its Data volume share one container: show only "/" (e.g. Macintosh HD).
         if out.contains(where: { $0.mountPoint == "/" }) { out.removeAll { $0.mountPoint == "/System/Volumes/Data" } }
-        return out.sorted { $0.bsdName.localizedStandardCompare($1.bsdName) == .orderedAscending }
+        let order = { (a: VolumeInfo, b: VolumeInfo) in a.bsdName.localizedStandardCompare(b.bsdName) == .orderedAscending }
+        return (out.sorted(by: order), idle.sorted(by: order))
     }
+
+    /// APFS helper volumes and the EFI partition: mountable, but never something to offer.
+    private static let systemVolumeNames: Set<String> = ["EFI", "Recovery", "Preboot", "VM", "Update", "Hardware", "xART", "iSCPreboot"]
 }

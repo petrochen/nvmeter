@@ -163,7 +163,7 @@ struct DriveDetail: View {
             Label("Write  \(Fmt.rate(drive.throughput.writeMBps))", systemImage: "arrow.up.circle")
         }.font(.callout.monospacedDigit())
         if let report = ConnectCheck.shared.reports[drive.id] { ConnectReportCard(report: report) }
-        volumes
+        VolumesCard(drive: drive)
         ForEach(drive.warnings, id: \.self) { message in
             if drive.isUSBOther && message.contains("SMART unavailable") {
                 Label(message, systemImage: "info.circle").foregroundStyle(.secondary)
@@ -254,27 +254,6 @@ struct DriveDetail: View {
             Text(t).font(.caption).foregroundStyle(.secondary)
             Text(v).font(.title3.monospacedDigit().weight(.semibold)).lineLimit(2).minimumScaleFactor(0.7)
         } }
-    }
-
-    private var volumes: some View {
-        Card("Volumes") {
-            if drive.volumes.isEmpty { Text("No mounted volumes").foregroundStyle(.secondary) }
-            ForEach(drive.volumes) { v in
-                HStack {
-                    Image(systemName: "internaldrive.fill").foregroundStyle(.secondary)
-                    VStack(alignment: .leading) {
-                        Text(v.name).font(.body.weight(.medium))
-                        Text("\(v.mountPoint) · \(v.fileSystem ?? "?")").font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 3) {
-                        Text("\(Fmt.capacity(v.freeBytes)) free of \(Fmt.capacity(v.sizeBytes))").font(.caption.monospacedDigit())
-                        ProgressView(value: v.sizeBytes == 0 ? 0 : Double(v.sizeBytes - min(v.freeBytes, v.sizeBytes)) / Double(v.sizeBytes))
-                            .frame(width: 160)
-                    }
-                }
-            }
-        }
     }
 
     private var attributes: some View {

@@ -16,6 +16,12 @@ Swift + SwiftUI + Swift Charts, one self-contained `.app`, no runtime dependenci
   bandwidth budget with live read / write bars and "why is it slow?" hints (enclosure saturated vs slot link limit).
 - **Graphs**: temperature and read / write MB/s per drive and in total, 5 min to 30 days from a local history
   database, hover crosshair with exact values.
+- **Volumes**: each volume shows READ-ONLY / READ-WRITE; external volumes can be unmounted without ejecting the drive
+  (it stays powered, SMART and temperature stay visible), mounted again, mounted read-only, or remounted read-only /
+  read-write (macOS needs root to switch a mounted volume, so this is an unmount plus a mount through DiskArbitration;
+  it fails, leaving the volume as it was, while an app has files open, and shows which apps). **Always mount
+  read-only** per drive remounts its volumes read-only whenever they appear (archive drives, client media), with an
+  alert when that is not possible. File system protection, not a hardware write block.
 - **Connect check**: every time a drive connects (or is found when NVMeter starts) its SMART is compared with the
   state from its previous visit: how long it was away, data written / read and hours powered on elsewhere, unsafe
   shutdowns (told apart: pulled while mounted, or an enclosure that cuts power after a clean eject), new media errors,
@@ -36,7 +42,8 @@ Swift + SwiftUI + Swift Charts, one self-contained `.app`, no runtime dependenci
 
 ## Read-only, no privileges
 
-Apart from the Speed Test (which you start yourself, see below) NVMeter never writes to a disk. It needs no sudo,
+Apart from the Speed Test and the mount buttons (which you start yourself, see below) NVMeter never writes to a disk
+or changes its state. It needs no sudo,
 no kernel extension and no helper, and never runs `smartctl`, `iostat`, `diskutil` or Python (the only external
 tool is `lsof`, to show which apps keep a volume busy when it cannot be ejected). Everything comes from public
 macOS APIs:
@@ -182,6 +189,8 @@ Tests                      parser tests (swift test)
 - Connect check state lives in `~/Library/Application Support/NVMeter/connect-check.json` (last visit and latest
   report per drive). Gaps under 2 minutes are treated as reconnect blips. Checks only happen while NVMeter runs, so on
   the first launch it offers to start at login (asked once; Settings has the switch).
+- `NVMeter --volume <diskNsM> unmount|mount|mount-ro|remount-ro|remount-rw` runs the same DiskArbitration calls as
+  the Volumes card and prints the resulting mount state.
 - `NVMeter --test-alerts` posts one test notification per rule; `--test-login-item` registers and unregisters the
   login item and prints the status of each step.
 
