@@ -14,6 +14,9 @@ final class Monitor {
     var selection: String?
     var tab: AppTab = .drives
     var lastTick = Date()
+    static let screenshotMode = CommandLine.arguments.contains("--screenshot")
+    /// True while the Command key is held in the main window: rows show their ⌘ number.
+    var showShortcutBadges = false
     /// What the menu bar item shows. Stored and only assigned on change, so the status item is not redrawn every
     /// second just because throughput (part of `drives`) changed.
     private(set) var menuBarIcon = MenuBarState(text: "–", status: .unknown)
@@ -41,6 +44,7 @@ final class Monitor {
 
     func start() {
         guard task == nil else { return }
+        DriveShortcuts.install(self)
         let sampler = self.sampler
         names = store.names()
         NotificationCenter.default.addObserver(forName: .nvmeterHistoryDeleted, object: nil, queue: .main) { [weak self] _ in
@@ -83,16 +87,20 @@ final class Monitor {
         recorder.ingest(snaps, refreshedSMART: refreshedSMART, now: now)
         var snaps = snaps
         for i in snaps.indices { snaps[i].customName = names[snaps[i].id] }
+        if DemoNames.enabled { DemoNames.apply(&snaps) }
         if snaps != drives { drives = snaps }
         let icon = MenuBarState(text: menuBarText, status: hottest?.status ?? .unknown)
         if icon != menuBarIcon { menuBarIcon = icon }
-        alerts.evaluate(snaps, now: now)
-        ExtraAlerts.shared.evaluate(snaps, raidSets: raidSets, center: alerts)
-        ConnectCheck.shared.evaluate(snaps, now: now)
-        MountController.shared.monitor = self
-        MountController.shared.enforce(snaps, now: now)      // before autoSnapshot: a brand new drive has no snapshot yet
-        if refreshedSMART { SnapshotStore.autoSnapshot(snaps) }
-        LinkMemory.shared.observe(snaps)
+        // Screenshot mode runs next to the real app: it must not post alerts or touch its state files and drives.
+        if !Self.screenshotMode {
+            alerts.evaluate(snaps, now: now)
+            ExtraAlerts.shared.evaluate(snaps, raidSets: raidSets, center: alerts)
+            ConnectCheck.shared.evaluate(snaps, now: now)    // before autoSnapshot: a brand new drive has no snapshot yet
+            MountController.shared.monitor = self
+            MountController.shared.enforce(snaps, now: now)
+            if refreshedSMART { SnapshotStore.autoSnapshot(snaps) }
+            LinkMemory.shared.observe(snaps)
+        }
         if !EnclosureTopology.isValidSelection(selection, drives: snaps) { selection = snaps.first?.id }
     }
 
@@ -263,4 +271,69 @@ struct HoverValues: Sendable {
     var read: Double?
     var write: Double?
     var hottest: Bool
+}
+
+// MARK: - ⌘0 to ⌘9 drive shortcuts
+
+extension Monitor {
+    /// Drive ids in shortcut order: index 0 = the internal startup drive (⌘0), then the other drives in sidebar
+    /// order (internal, enclosures by slot, other disks) as ⌘1 to ⌘9.
+    var shortcutOrder: [String] {
+        let showOthers = UserDefaults.standard.object(forKey: "showDisksWithoutSMART") as? Bool ?? true
+        let raid = Set(raidSets.flatMap(\.memberDrives))
+        let layout = EnclosureTopology.build(drives.filter { !raid.contains($0.bsdName) }, showOthers: showOthers)
+        let ordered = layout.internalDrives.map(\.id) + layout.enclosures.flatMap { $0.slots.map(\.drive.id) } + layout.others.map(\.id)
+        let boot = drives.first { d in d.connection.kind == "internal" && d.volumes.contains { $0.mountPoint == "/" } }?.id
+            ?? layout.internalDrives.first?.id
+        return (boot.map { [$0] } ?? [""]) + ordered.filter { $0 != boot }
+    }
+
+    func shortcutNumber(for id: String) -> Int? {
+        guard let i = shortcutOrder.firstIndex(of: id), i <= 9 else { return nil }
+        return i
+    }
+
+    /// ⌘ + digit: switch to Drives and select that drive. Returns false when no drive has that number.
+    @discardableResult
+    func selectShortcut(_ n: Int) -> Bool {
+        let order = shortcutOrder
+        guard order.indices.contains(n), !order[n].isEmpty else { return false }
+        tab = .drives
+        selection = order[n]
+        return true
+    }
+}
+
+import AppKit
+
+/// Local key handling for the main window: ⌘0 to ⌘9 select drives, holding ⌘ shows the numbers.
+@MainActor
+enum DriveShortcuts {
+    private static var installed = false
+
+    static func install(_ monitor: Monitor) {
+        guard !installed else { return }
+        installed = true
+        NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak monitor] event in
+            nonisolated(unsafe) let ev = event          // local monitors run on the main thread
+            let consumed = MainActor.assumeIsolated { () -> Bool in
+                guard let monitor else { return false }
+                let mods = ev.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting([.capsLock, .numericPad, .function])
+                let inMain = ev.window.map { !($0 is NSPanel) && $0.styleMask.contains(.titled) } ?? false
+                if ev.type == .flagsChanged {
+                    let show = inMain && mods == .command
+                    if monitor.showShortcutBadges != show { monitor.showShortcutBadges = show }
+                    return false
+                }
+                guard inMain, mods == .command, let ch = ev.charactersIgnoringModifiers, ch.count == 1,
+                      let n = Int(ch), monitor.selectShortcut(n) else { return false }
+                monitor.showShortcutBadges = false
+                return true
+            }
+            return consumed ? nil : event
+        }
+        NotificationCenter.default.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak monitor] _ in
+            MainActor.assumeIsolated { monitor?.showShortcutBadges = false }
+        }
+    }
 }
