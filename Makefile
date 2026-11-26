@@ -2,7 +2,7 @@
 CONFIG ?= release
 APP    := build/NVMeter.app
 
-.PHONY: build app run dump icon shots
+.PHONY: build app run dump icon shots release install-skill
 
 build:
 	swift build -c $(CONFIG)
@@ -40,3 +40,32 @@ install-skill:
 	for d in $(HOME)/.claude/skills $(HOME)/.codex/skills; do \
 		mkdir -p $$d && rm -rf $$d/nvmeter && cp -R skills/nvmeter $$d/nvmeter; done
 	@echo "Installed skills/nvmeter into ~/.claude/skills and ~/.codex/skills"
+
+# Notarized release: universal binary, Developer ID signature with hardened runtime, notarization, stapling.
+# Needs the "Developer ID Application" identity in the Keychain and a notarytool profile:
+#   xcrun notarytool store-credentials $(NOTARY_PROFILE) --key <AuthKey.p8> --key-id <id> --issuer <issuer-uuid>
+SIGN_ID        ?= Developer ID Application: ESCUDIX LTD (DCS482G699)
+NOTARY_PROFILE ?= nvmeter-notary
+VERSION        := $(shell /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Resources/Info.plist)
+RELDIR         := build/release
+REL            := $(RELDIR)/NVMeter.app
+ZIP            := $(RELDIR)/NVMeter-$(VERSION).zip
+
+release:
+	swift build -c release --arch arm64 --arch x86_64
+	mkdir -p $(RELDIR) && find $(RELDIR) -mindepth 1 -delete
+	mkdir -p $(REL)/Contents/MacOS $(REL)/Contents/Resources/Logos
+	cp "$$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/NVMeter" $(REL)/Contents/MacOS/NVMeter
+	cp Resources/Info.plist $(REL)/Contents/Info.plist
+	cp Resources/AppIcon.icns $(REL)/Contents/Resources/AppIcon.icns
+	cp Resources/Logos/*.svg $(REL)/Contents/Resources/Logos/
+	xattr -cr $(REL)
+	codesign --force --options runtime --timestamp --sign "$(SIGN_ID)" $(REL)
+	codesign --verify --strict --verbose=2 $(REL)
+	ditto -c -k --keepParent $(REL) $(RELDIR)/submit.zip
+	xcrun notarytool submit $(RELDIR)/submit.zip --keychain-profile "$(NOTARY_PROFILE)" --wait
+	xcrun stapler staple $(REL)
+	spctl --assess --type execute --verbose=2 $(REL)
+	ditto -c -k --keepParent $(REL) $(ZIP)
+	shasum -a 256 $(ZIP)
+	@echo "Notarized $(ZIP)"
