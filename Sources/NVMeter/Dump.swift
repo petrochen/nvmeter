@@ -40,4 +40,4 @@ enum Dump {
     }
 }
 
-let appVersion = "0.1.0"
+let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"

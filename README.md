@@ -69,6 +69,33 @@ only opens the plug-in and issues read-only calls (SMART data, Identify, log pag
 The SMART client is opened for each read and closed right away: macOS allows only one open client per device, so
 holding it would lock out `smartctl`, DriveDx or a second NVMeter.
 
+## For AI agents (MCP)
+
+`NVMeter --mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server over stdio, built into the same
+binary. It gives an agent compact, joined answers instead of six tools' raw output (`list_drives` for six drives is
+about 4 KB versus 33 KB for `--dump`), plus what only NVMeter has: history, events, connect checks and SMART snapshots.
+
+```sh
+claude mcp add --scope user nvmeter -- ~/Applications/NVMeter.app/Contents/MacOS/NVMeter --mcp
+```
+
+| Tool | What it returns |
+| ---- | --------------- |
+| `list_drives` | every drive in one line each: health, temperature vs its limits, wear, TB written, errors, unsafe shutdowns, enclosure and slot, link, volumes (read-only state), MB/s, warnings, latest connect check |
+| `drive_details` | all SMART fields, limits, link, usage trends (written per day, lifetime projection), connect check, recent speed tests |
+| `history` | temperature and MB/s over 1 h to 30 d with min / max / average |
+| `events` | alerts and connect checks |
+| `enclosures` | shared bandwidth budget, per-slot link, ceiling and current MB/s |
+| `compare_snapshots` | SMART snapshot vs snapshot or now, with deltas per day |
+| `drive_report` | the shareable report as Markdown or JSON |
+| `speed_test` | writes: quick, random, live or sustained test (needs `confirm: true`) |
+| `volume` | unmount, mount, read-only / read-write remount (needs `confirm: true`) |
+
+Serial numbers are hidden unless `include_serials` is set. The two state-changing tools only describe what they would
+do until they are called with `confirm: true`, which the agent should send only after the user agreed; the internal
+drive and system volumes are refused. Every call takes a fresh 1 s sample (about 1.1 s); history needs the app to have
+been running. Speed tests run from MCP are not added to the app's history.
+
 ## Build and run
 
 Requires Xcode 26+ command line tools (Swift 6 toolchain), macOS 14+.
