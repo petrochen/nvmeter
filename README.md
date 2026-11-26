@@ -21,7 +21,7 @@ Every drive gets a verdict and its temperature against the drive's own warning a
 70 °C). You also see wear, terabytes written, power-on hours, media errors and every NVMe SMART field with a status
 dot. Vendor logos and your own names for drives ("A-cam", "Proxies") make a desk full of identical sticks readable.
 Hold ⌘ to see a number next to each drive. ⌘0 always jumps to the Mac's own SSD, and ⌘1 to ⌘9 to the others in
-sidebar order.
+sidebar order; the Drives menu lists them too.
 
 ### The enclosure as one thing
 
