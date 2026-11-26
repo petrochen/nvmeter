@@ -8,10 +8,34 @@ It tells you whether a drive is healthy and how hot it runs. It shows which slot
 and what that slot's link can carry, and why a copy is slow. It also remembers what happened to a drive while it was
 plugged into someone else's Mac.
 
-It is a native Mac app (Swift, SwiftUI), free and MIT licensed. It needs no sudo, no kernel extension and no helper,
-and reads everything through public macOS APIs.
+It is a native Mac app (Swift, SwiftUI), free and open source under the MIT license. It needs no sudo, no
+kernel extension and no helper, and reads everything through public macOS APIs.
 
 ![Drive overview](docs/screenshots/drive.png)
+
+## Why another disk app
+
+On Windows I had CrystalDiskInfo for drive health and CrystalDiskMark for speed, and that was it. On the Mac the
+same job took a pile of tools. Blackmagic Disk Speed Test or AJA System Test told me whether a drive could record
+ProRes. AmorphousDiskMark gave the benchmark numbers, DriveDx or `smartctl` in Terminal showed SMART, iStat Menus
+put temperatures in the menu bar. To find out which PCIe link a drive in the enclosure actually got I had to dig
+through System Information, and Activity Monitor showed only total disk traffic. None of them knew about the four-bay
+enclosure on my desk, and none remembered what a drive went through last week.
+
+If you searched for "CrystalDiskInfo for Mac" or a Mac alternative to CrystalDiskMark or Blackmagic Disk Speed Test,
+this is the app I wanted:
+
+| You reach for | to see | In NVMeter |
+| --- | --- | --- |
+| CrystalDiskInfo (Windows only), DriveDx, `smartctl` | SMART health, temperature, wear, TB written | Drives tab, alerts, connect checks, history |
+| CrystalDiskMark, AmorphousDiskMark | sequential and random 4K speed | Speed Test: quick, sustained write, random 4K |
+| Blackmagic Disk Speed Test, AJA System Test | whether a drive keeps up with a video format | Live loop with write / read dials and a resolution by frame rate grid per codec |
+| iStat Menus | drive temperatures at a glance | menu bar item and popover |
+| System Information, `ioreg` | the PCIe link and USB4 / Thunderbolt / USB mode a drive got | Enclosure view with per-slot links and the shared bandwidth |
+| Activity Monitor | which disk is busy | MB/s per drive and per enclosure, with history |
+| Disk Utility | unmounting and mounting | unmount without ejecting, read-only mounts |
+
+NVMeter is not affiliated with any of these products; their names are trademarks of their owners.
 
 ## What you get
 
@@ -320,4 +344,5 @@ prints JSON (`--seconds` is the time limit of a live loop, `--max-gb` its write 
 
 ## License
 
-MIT
+MIT, see [LICENSE](LICENSE). Contributions are welcome, including AI-assisted ones: see
+[CONTRIBUTING.md](CONTRIBUTING.md). Bundled Simple Icons logos are CC0.
