@@ -2,8 +2,23 @@ import AppKit
 
 /// Menu bar image: hottest temperature, optional throughput. Template (adapts to the menu bar) while all is fine,
 /// coloured when a drive needs attention.
+struct MenuBarState: Equatable, Sendable {
+    var text: String
+    var status: HealthStatus
+}
+
 enum MenuBarIcon {
-    static func image(text: String, status: HealthStatus) -> NSImage {
+    /// The status item is redrawn whenever it gets a new image: reuse the last one while text and status stay the same.
+    @MainActor private static var last: (text: String, status: HealthStatus, image: NSImage)?
+
+    @MainActor static func image(text: String, status: HealthStatus) -> NSImage {
+        if let l = last, l.text == text, l.status == status { return l.image }
+        let img = render(text: text, status: status)
+        last = (text, status, img)
+        return img
+    }
+
+    private static func render(text: String, status: HealthStatus) -> NSImage {
         let colored = status == .caution || status == .bad
         let color: NSColor = status == .bad ? .systemRed : .systemOrange
         let font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)

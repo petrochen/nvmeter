@@ -1,10 +1,27 @@
 import SwiftUI
 
+/// Whether the main window can be seen. SwiftUI keeps updating a closed or fully covered window's views every
+/// second (measured: ~5 % CPU with the window closed), so its content is only built while it is visible.
+@MainActor @Observable
+final class WindowState {
+    static let shared = WindowState()
+    var mainVisible = true
+}
+
 struct ContentView: View {
     @Environment(Monitor.self) private var monitor
-    var body: some View {
+    private var windowState = WindowState.shared
+    @ViewBuilder var body: some View {
+        if windowState.mainVisible || CommandLine.arguments.contains("--screenshot") {
+            tabs
+        } else {
+            Color.clear.frame(minWidth: 940, minHeight: 640)
+        }
+    }
+
+    private var tabs: some View {
         @Bindable var m = monitor
-        TabView(selection: $m.tab) {
+        return TabView(selection: $m.tab) {
             DrivesView().tabItem { Label("Drives", systemImage: "externaldrive") }.tag(AppTab.drives)
             GraphsView().tabItem { Label("Graphs", systemImage: "chart.xyaxis.line") }.tag(AppTab.graphs)
             SpeedTestView().tabItem { Label("Speed Test", systemImage: "speedometer") }.tag(AppTab.speed)

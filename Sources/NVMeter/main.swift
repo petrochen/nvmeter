@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 // --hide-serials masks serial numbers (UI and dump) so output can be shared.
@@ -30,4 +31,13 @@ if CommandLine.arguments.contains("--speedtest-selftest") {
 }
 if CommandLine.arguments.contains("--volume") { MountCLI.run() }
 if CommandLine.arguments.contains("--mcp") { MCPServer.run() }
+
+// One app instance: two would record the same history twice and double every notification.
+// Screenshot mode renders its own windows and may run next to the app.
+if !CommandLine.arguments.contains("--screenshot"), let id = Bundle.main.bundleIdentifier,
+   let other = NSRunningApplication.runningApplications(withBundleIdentifier: id).first(where: { $0.processIdentifier != getpid() && !$0.isTerminated }) {
+    other.activate()
+    FileHandle.standardError.write(Data("NVMeter is already running (pid \(other.processIdentifier)): activated it instead\n".utf8))
+    exit(0)
+}
 NVMeterApp.main()
