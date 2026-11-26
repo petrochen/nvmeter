@@ -29,4 +29,5 @@ if CommandLine.arguments.contains("--speedtest-selftest") {
     exit(0)
 }
 if CommandLine.arguments.contains("--volume") { MountCLI.run() }
+if CommandLine.arguments.contains("--mcp") { MCPServer.run() }
 NVMeterApp.main()
