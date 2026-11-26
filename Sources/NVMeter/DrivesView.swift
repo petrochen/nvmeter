@@ -27,10 +27,9 @@ struct DrivesView: View {
 struct DriveRow: View {
     let drive: DriveSnapshot
     @Environment(Monitor.self) private var monitor
-    @State private var renaming = false
-    @State private var nameDraft = ""
     var body: some View {
         HStack(spacing: 10) {
+            if monitor.showShortcutBadges, let n = monitor.shortcutNumber(for: drive.id) { ShortcutBadge(number: n) }
             VendorLogo(vendor: drive.vendor, height: 24)
             VStack(alignment: .leading, spacing: 2) {
                 Text(drive.displayName).font(.headline).lineLimit(1)
@@ -52,16 +51,21 @@ struct DriveRow: View {
         }
         .padding(.vertical, 3)
         .contentShape(Rectangle())
-        .simultaneousGesture(TapGesture(count: 2).onEnded { nameDraft = drive.customName ?? ""; renaming = true })
-        .contextMenu {
-            Button("Rename…") { nameDraft = drive.customName ?? ""; renaming = true }
-            Button("Reset name") { monitor.rename(drive.id, to: nil) }.disabled(drive.customName == nil)
-        }
-        .alert("Rename drive", isPresented: $renaming) {
-            TextField("Name", text: $nameDraft)
-            Button("Rename") { monitor.rename(drive.id, to: nameDraft) }
-            Button("Cancel", role: .cancel) {}
-        } message: { Text("Shown instead of the volume name. An empty name restores the default.") }
+        // Rename (context menu, double-click) lives on the sidebar List: a tap gesture here swallowed single clicks.
+    }
+}
+
+/// "⌘3" next to a drive while the Command key is held.
+struct ShortcutBadge: View {
+    let number: Int
+    var body: some View {
+        Text("⌘\(number)")
+            .font(.caption.weight(.bold).monospacedDigit())
+            .foregroundStyle(.white)
+            .padding(.horizontal, 5).padding(.vertical, 2)
+            .background(Capsule().fill(Color.accentColor))
+            .fixedSize()
+            .accessibilityLabel("Command \(number)")
     }
 }
 

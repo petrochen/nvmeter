@@ -1,44 +1,104 @@
 # NVMeter
 
-A native macOS monitor for NVMe SSDs and the external enclosures they live in: "CrystalDiskInfo for the Mac,
-with iStat-style graphs", built for people who work with lots of external drives (video, photo, archives).
-Swift + SwiftUI + Swift Charts, one self-contained `.app`, no runtime dependencies, no sudo, no kernel extension.
+NVMeter watches the SSDs on your Mac and the enclosures they sit in. It was built for people who live off external
+drives: shoots that land on a four-bay enclosure, proxies on one stick, an archive on another, client media that
+should never be written to by accident.
 
-![icon](docs/icon.png)
+It tells you whether a drive is healthy and how hot it runs. It shows which slot of the enclosure each drive sits in
+and what that slot's link can carry, and why a copy is slow. It also remembers what happened to a drive while it was
+plugged into someone else's Mac.
 
-- **Drives**: health verdict, temperature with the drive's own warning / critical thresholds, model, serial,
-  firmware, capacity, interface (for example `PCIe 4.0 x1 via USB4 40 Gb/s, OWC Express 4M2`), every NVMe SMART
-  field with a status dot, totals written / read, power-on hours, volumes, NVMe self-test log, vendor logo,
-  custom drive names, and a **Usage & lifetime** section (written per day, lifetime projection, errors added since
-  the drive was first seen).
-- **Enclosures**: drives grouped by connection (internal, each USB4 / Thunderbolt / USB enclosure with its Mac
-  port, other disks), slot numbers, the per-slot PCIe link ("Gen4 x1 of Gen4 x4"), and the enclosure's shared
-  bandwidth budget with live read / write bars and "why is it slow?" hints (enclosure saturated vs slot link limit).
-- **Graphs**: temperature and read / write MB/s per drive and in total, 5 min to 30 days from a local history
-  database, hover crosshair with exact values.
-- **Volumes**: each volume shows READ-ONLY / READ-WRITE; external volumes can be unmounted without ejecting the drive
-  (it stays powered, SMART and temperature stay visible), mounted again, mounted read-only, or remounted read-only /
-  read-write (macOS needs root to switch a mounted volume, so this is an unmount plus a mount through DiskArbitration;
-  it fails, leaving the volume as it was, while an app has files open, and shows which apps). **Always mount
-  read-only** per drive remounts its volumes read-only whenever they appear (archive drives, client media), with an
-  alert when that is not possible. File system protection, not a hardware write block.
-- **Connect check**: every time a drive connects (or is found when NVMeter starts) its SMART is compared with the
-  state from its previous visit: how long it was away, data written / read and hours powered on elsewhere, unsafe
-  shutdowns (told apart: pulled while mounted, or an enclosure that cuts power after a clean eject), new media errors,
-  wear, spare, time above the warning temperature, a USB fallback or a changed connection. The result is on the
-  drive's Overview and in Events, a SMART snapshot is saved, and a notification is posted only when something needs
-  attention or the drive was used elsewhere.
-- **Menu bar** item with the hottest temperature and a drive list; **alerts** for overheating, SMART counters
-  getting worse, a PCIe link or USB4 → USB downgrade, degraded RAID sets; an **Events** log; launch at login.
-- **Reports** (PDF / JSON / Markdown) for warranty claims, resale or forum posts, and SMART **snapshots** with
-  compare.
-- **Speed Test** for media work: quick, sustained write with SLC-cache cliff detection, random 4K, a **live loop**
-  (write and read the test file again and again, two live dials, stops on a time / write limit or at the drive's
-  warning temperature), and a verdict per video format (ProRes, ProRes RAW, BRAW, H.265, uncompressed): a
-  resolution x frame rate grid per codec and how many streams fit.
-- **SATA / ATA SMART** for drives behind Thunderbolt / PCIe SATA controllers (without waking sleeping hard
-  drives) and **AppleRAID** set status.
-- Every screen works in light and dark mode; "Hide serial numbers" makes screenshots safe to share.
+It is a native Mac app (Swift, SwiftUI), free and MIT licensed. It needs no sudo, no kernel extension and no helper,
+and reads everything through public macOS APIs.
+
+![Drive overview](docs/screenshots/drive.png)
+
+## What you get
+
+### Health at a glance
+
+Every drive gets a verdict and its temperature against the drive's own warning and critical limits (not a generic
+70 °C). You also see wear, terabytes written, power-on hours, media errors and every NVMe SMART field with a status
+dot. Vendor logos and your own names for drives ("A-cam", "Proxies") make a desk full of identical sticks readable.
+Hold ⌘ to see a number next to each drive. ⌘0 always jumps to the Mac's own SSD, and ⌘1 to ⌘9 to the others in
+sidebar order.
+
+### The enclosure as one thing
+
+Drives are grouped by how they connect: internal, each USB4 / Thunderbolt / USB enclosure with the Mac port it is
+plugged into, and other disks. For each slot you see the PCIe link it got ("Gen4 x1 of Gen4 x4" is normal for
+four-bay enclosures) and the enclosure's shared bandwidth, with live bars. When a copy crawls, the hints tell apart
+an enclosure that is saturated from a slot that hit its own link limit. If an enclosure falls back from USB4 to plain
+USB (a bad cable, a wrong port, a switch on the case), NVMeter says so right away. SMART disappears in that mode and
+speed drops to about 1 GB/s.
+
+![Enclosure view](docs/screenshots/enclosure.png)
+
+### History you can scroll back through
+
+Temperature and read / write speed are kept for 30 days (up to 2 years at hourly resolution) in a small local
+database. You can zoom from 5 minutes to 30 days and hover to read exact values. Each drive gets written-per-day
+figures, a lifetime projection from its own pace, and the count of errors that appeared since NVMeter first saw it.
+
+![History](docs/screenshots/history.png)
+
+### A check every time a drive comes back
+
+When a drive connects, NVMeter compares it with the last time it saw it. You learn how long it was away, how much was
+written and read on another machine and how many hours it ran there. New errors, wear, lost spare and a slower
+connection show up as well. Unsafe shutdowns are counted with context: many enclosures cut power even after a clean
+eject, so NVMeter remembers whether you ejected first and only warns when the drive was pulled while mounted. Every
+check saves a SMART snapshot, so "what changed since March" is one compare away.
+
+### Speed tests that answer production questions
+
+Quick (5 GB write and uncached read), sustained write that finds the point where the SLC cache runs out, random 4K,
+and a live loop that writes and reads again and again with two dials until you stop it or it hits a time, size or
+temperature limit. Results turn into a resolution by frame rate grid per codec: ProRes 422 to 4444 XQ, BRAW,
+uncompressed. It tells you whether the drive can record it and whether it can play it back.
+
+![Live speed test](docs/screenshots/speed-test-live.png)
+
+### Volumes you control
+
+Unmount a volume without ejecting the drive (it stays powered, SMART stays visible) and mount it again later. Remount
+a volume read-only before handing it to an ingest station, or set a drive to always mount read-only. That is useful
+for archives and for client media. If an app holds files open, NVMeter lists which ones instead of failing silently.
+
+### In the menu bar
+
+<img src="docs/screenshots/menu-bar.png" alt="Menu bar" width="360" align="right">
+
+The menu bar shows the hottest drive; the popover lists every drive with link, speed and a short temperature
+trace. Alerts cover overheating, SMART counters getting worse, a slower PCIe link, a USB fallback, a degraded RAID set
+and an always-read-only drive that could not be protected. With the window closed NVMeter uses about 1 % of one CPU
+core (numbers below). It can start at login.
+
+### Reports for warranty claims and resale
+
+One click gives a PDF, Markdown or JSON report of a drive with charts, serial number hidden if you want. Use it for an
+RMA, a resale listing or a forum thread.
+
+<br clear="right">
+
+### Ask your AI agent about your drives
+
+NVMeter ships an MCP server and an agent skill for Claude Code and Codex. Ask "why is my copy to the enclosure slow?"
+or "can this drive record 6K BRAW?" and the agent gets compact, joined answers from NVMeter instead of raw output from six command line tools,
+plus what only NVMeter knows: history, events, connect checks and snapshots. Anything that writes or unmounts needs your explicit yes. Details in
+[For AI agents](#for-ai-agents-mcp).
+
+### Also
+
+SATA SMART for drives behind Thunderbolt and PCIe SATA controllers (it never wakes sleeping hard drives), AppleRAID
+set status, the NVMe self-test log, light and dark mode, and a "hide serial numbers" switch for screenshots.
+
+## Install
+
+Build it from source (see [Build and run](#build-and-run)): `make app` gives `build/NVMeter.app`, copy it to
+Applications. The app is ad-hoc signed, not notarized: on first launch right-click it and choose Open, and allow
+notifications in System Settings if you want alerts. NVMeter offers to start at login on first launch, since the
+connect checks and history only happen while it runs.
 
 ## Read-only, no privileges
 
@@ -142,7 +202,9 @@ volumes, a 2 second throughput sample, health rows) and exits. Useful for verifi
 `--hide-serials` (also a Settings toggle) masks serial numbers in the UI and the dump, so output can be shared.
 
 `NVMeter --screenshot <dir> [--appearance dark|light] [--warmup 60]` renders the app window into PNG files
-(with a simulated hover crosshair on the Graphs tab) and quits. Needs no Screen Recording permission.
+(with a simulated hover crosshair on the Graphs tab) and quits. Needs no Screen Recording permission. `--demo-names` replaces volume names and
+mount points with neutral ones (with `--hide-serials`, screenshots carry nothing of the machine); the README
+screenshots were made with `--hide-serials --demo-names --db <scratch.sqlite> --seed-demo`.
 
 ## History store
 

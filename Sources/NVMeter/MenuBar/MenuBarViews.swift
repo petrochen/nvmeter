@@ -85,7 +85,7 @@ struct MenuPopover: View {
     }
 
     @ViewBuilder private var recentEvents: some View {
-        let ev = Array(monitor.alerts.events.prefix(3))
+        let ev = DemoNames.enabled ? [] : Array(monitor.alerts.events.prefix(3))
         if !ev.isEmpty {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {

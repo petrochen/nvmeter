@@ -75,3 +75,27 @@ enum ScreenshotMode {
         if let png = rep.representation(using: .png, properties: [:]) { try? png.write(to: url) }
     }
 }
+
+/// `--demo-names` (screenshot mode): replaces real volume names, mount points and custom names with neutral ones,
+/// so screenshots for the README carry nothing of the machine they were taken on. Serials: `--hide-serials`.
+enum DemoNames {
+    static let enabled = CommandLine.arguments.contains("--demo-names")
+    private static let pool = ["A001_Footage", "Proxies", "Archive_2025", "Cache", "Backup", "Client_Delivery", "Photos_RAW"]
+
+    static func apply(_ drives: inout [DriveSnapshot]) {
+        // Stable mapping: real names sorted, the startup volume keeps its standard name.
+        let real = Set(drives.flatMap { ($0.volumes + $0.unmountedVolumes).map(\.name) }).subtracting(["Macintosh HD"]).sorted()
+        var map: [String: String] = [:]
+        for (i, n) in real.enumerated() { map[n] = i < pool.count ? pool[i] : "Volume \(i + 1)" }
+        func fix(_ v: inout VolumeInfo) {
+            guard let new = map[v.name] else { return }
+            v.name = new
+            if !v.mountPoint.isEmpty, v.mountPoint != "/" { v.mountPoint = "/Volumes/" + new }
+        }
+        for i in drives.indices {
+            drives[i].customName = nil
+            for j in drives[i].volumes.indices { fix(&drives[i].volumes[j]) }
+            for j in drives[i].unmountedVolumes.indices { fix(&drives[i].unmountedVolumes[j]) }
+        }
+    }
+}

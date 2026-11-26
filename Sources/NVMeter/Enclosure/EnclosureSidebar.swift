@@ -6,6 +6,8 @@ struct TopologySidebar: View {
     @Binding var selection: String?
     let showOthers: Bool
     @State private var collapsed: Set<String> = []
+    @State private var renamingID: String?
+    @State private var nameDraft = ""
 
     var body: some View {
         let raidDrives = Set(monitor.raidSets.flatMap(\.memberDrives))
@@ -31,7 +33,24 @@ struct TopologySidebar: View {
                 }
             }
         }
+        // Context menu and double-click through the List itself, so single clicks keep selecting rows.
+        .contextMenu(forSelectionType: String.self) { ids in
+            if let id = ids.first, let d = monitor.drives.first(where: { $0.id == id }) {
+                Button("Rename…") { startRename(d) }
+                Button("Reset name") { monitor.rename(d.id, to: nil) }.disabled(d.customName == nil)
+                if let n = monitor.shortcutNumber(for: d.id) { Text("Select with ⌘\(n)") }
+            }
+        } primaryAction: { ids in
+            if let id = ids.first, let d = monitor.drives.first(where: { $0.id == id }) { startRename(d) }
+        }
+        .alert("Rename drive", isPresented: Binding(get: { renamingID != nil }, set: { if !$0 { renamingID = nil } })) {
+            TextField("Name", text: $nameDraft)
+            Button("Rename") { if let id = renamingID { monitor.rename(id, to: nameDraft) } }
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("Shown instead of the volume name. An empty name restores the default.") }
     }
+
+    private func startRename(_ d: DriveSnapshot) { nameDraft = d.customName ?? ""; renamingID = d.id }
 
     private func section<C: View>(_ title: String, key: String, @ViewBuilder content: () -> C) -> some View {
         Section(isExpanded: Binding(get: { !collapsed.contains(key) },
