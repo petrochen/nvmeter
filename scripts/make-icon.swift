@@ -1,43 +1,25 @@
 #!/usr/bin/env swift
-// Generates NVMeter's app icon from code (CoreGraphics only, original artwork).
+// Generates NVMeter's app icon from Resources/AppIcon.svg.
 // Usage (from the repo root):  swift scripts/make-icon.swift
 // Writes build/AppIcon.iconset/*.png, Resources/AppIcon.icns (via iconutil) and docs/icon.png (512 px preview).
-import CoreGraphics
+import AppKit
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
-func rgb(_ hex: UInt32, _ a: CGFloat = 1) -> CGColor {
-    CGColor(srgbRed: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255,
-            blue: CGFloat(hex & 0xFF) / 255, alpha: a)
-}
-let space = CGColorSpace(name: CGColorSpace.sRGB)!
-
-/// Front panel of a four-bay enclosure with one illuminated slot.
-func draw(_ ctx: CGContext, simple: Bool) {
-    func panel(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat, _ radius: CGFloat, _ color: UInt32) {
-        let rect = CGRect(x: x, y: y, width: w, height: h)
-        ctx.addPath(CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil))
-        ctx.setFillColor(rgb(color))
-        ctx.fillPath()
-    }
-    panel(80, 80, 864, 864, 195, 0x223932)
-    panel(164, 238, 696, 548, 76, 0xE7E9D9)
-    for index in 0..<4 {
-        let x = CGFloat(226 + 150 * index)
-        panel(x, 312, 116, 400, 28, 0x34493F)
-        if index == 1 {
-            panel(x + (simple ? 0 : 13), 432, simple ? 116 : 90, 245, 13, 0xF3B367)
-        }
-    }
-}
+let artworkURL = URL(fileURLWithPath: "Resources/AppIcon.svg")
+guard let artwork = NSImage(contentsOf: artworkURL) else { fatalError("Cannot load AppIcon.svg") }
+artwork.cacheMode = .never
 
 func render(px: Int) -> CGImage {
-    let ctx = CGContext(data: nil, width: px, height: px, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+    let ctx = CGContext(data: nil, width: px, height: px, bitsPerComponent: 8, bytesPerRow: 0,
+                        space: CGColorSpace(name: CGColorSpace.sRGB)!,
                         bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+    NSGraphicsContext.saveGraphicsState()
+    defer { NSGraphicsContext.restoreGraphicsState() }
+    NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
     ctx.interpolationQuality = .high
-    ctx.scaleBy(x: CGFloat(px) / 1024, y: CGFloat(px) / 1024)
-    draw(ctx, simple: px <= 32)
+    artwork.draw(in: CGRect(x: 0, y: 0, width: px, height: px))
     return ctx.makeImage()!
 }
 

@@ -1,0 +1,38 @@
+name: Hardware report
+description: NVMeter on a drive, enclosure, dock or RAID set it has not seen yet (works or not).
+labels: [hardware report]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Reports from real hardware are the most useful contribution: SATA behind Thunderbolt docks, RAID sets,
+        80 Gb/s links, other multi-bay enclosures, USB bridges.
+  - type: input
+    id: hardware
+    attributes:
+      label: Hardware
+      placeholder: "Sabrent 4-bay Thunderbolt 5 enclosure, 2x Samsung 990 Pro"
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: Result
+      options:
+        - Everything shows correctly
+        - Some values are missing or wrong
+        - The drive is not shown
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: What is missing or wrong
+  - type: textarea
+    id: dump
+    attributes:
+      label: Dump
+      description: "`NVMeter --dump --hide-serials` (paste or attach)."
+      render: json
+    validations:
+      required: true
