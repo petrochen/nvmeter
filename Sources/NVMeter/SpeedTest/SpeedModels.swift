@@ -1,10 +1,10 @@
 import Foundation
 
 enum SpeedMode: String, Codable, CaseIterable, Identifiable, Sendable {
-    case quick, sustained, random
+    case quick, sustained, random, live
     var id: String { rawValue }
     var title: String {
-        switch self { case .quick: "Quick"; case .sustained: "Sustained write"; case .random: "Random 4K" }
+        switch self { case .quick: "Quick"; case .sustained: "Sustained write"; case .random: "Random 4K"; case .live: "Live loop" }
     }
 }
 
@@ -32,6 +32,15 @@ struct SpeedSample: Identifiable, Sendable {
     var iops: Double
     /// Bytes handled in this phase so far.
     var bytes: Int64
+    /// Live loop only: cycle number (from 1) and bytes written in the whole run so far.
+    var cycle = 0
+    var totalWritten: Int64 = 0
+}
+
+/// One write + read pass of the live loop.
+struct LiveCycle: Codable, Equatable, Sendable {
+    var writeMBps: Double
+    var readMBps: Double
 }
 
 struct PhaseStat: Codable, Equatable, Sendable {
@@ -75,6 +84,9 @@ struct SpeedResult: Codable, Identifiable, Equatable, Sendable {
     /// Sustained write: MB/s every 0.5 s.
     var series: [Double]?
     var cliff: CliffInfo?
+    /// Live loop: one entry per completed write + read cycle, and why the loop stopped.
+    var cycles: [LiveCycle]?
+    var stopReason: String?
     var tempStartC: Int?
     var tempMaxC: Int?
     var cancelled = false

@@ -1,6 +1,6 @@
 import Foundation
 
-/// `NVMeter --speedtest <mountpoint> --mode quick|sustained|random [--size GB] [--seconds N]` prints JSON and exits.
+/// `NVMeter --speedtest <mountpoint> --mode quick|sustained|random|live [--size GB] [--seconds N] [--max-gb N]` prints JSON and exits.
 /// `--allow-boot` is required for the startup volume. Progress goes to stderr.
 enum SpeedCLI {
     static func arg(_ flag: String) -> String? {
@@ -11,13 +11,14 @@ enum SpeedCLI {
 
     static func run() -> Never {
         func fail(_ m: String) -> Never { FileHandle.standardError.write(Data("error: \(m)\n".utf8)); exit(2) }
-        guard let mp = arg("--speedtest") else { fail("usage: --speedtest <mountpoint> --mode quick|sustained|random [--size GB] [--seconds N]") }
-        guard let mode = SpeedMode(rawValue: arg("--mode") ?? "quick") else { fail("--mode must be quick, sustained or random") }
+        guard let mp = arg("--speedtest") else { fail("usage: --speedtest <mountpoint> --mode quick|sustained|random|live [--size GB] [--seconds N] [--max-gb N]") }
+        guard let mode = SpeedMode(rawValue: arg("--mode") ?? "quick") else { fail("--mode must be quick, sustained, random or live") }
         guard let vol = SpeedVolume.find(mountPoint: mp) else { fail("not a writable local volume: \(mp)") }
         if vol.isBoot, !CommandLine.arguments.contains("--allow-boot") { fail("refusing the startup volume without --allow-boot") }
         var req = SpeedRequest(mountPoint: vol.mountPoint, mode: mode)
         if let s = arg("--size") { if s == "free10" { req.untilTenPercentFree = true } else if let g = Double(s) { req.sizeGB = g } else { fail("bad --size") } }
-        if let s = arg("--seconds"), let d = Double(s) { req.randomSeconds = d }
+        if let s = arg("--seconds"), let d = Double(s) { req.randomSeconds = d; req.liveSeconds = d }
+        if let s = arg("--max-gb"), let g = Double(s) { req.liveMaxBytes = Int64(g * 1e9) }
 
         let sampler = Sampler()
         func driveInfo() -> (key: String, name: String, temp: Int?) {
@@ -47,7 +48,8 @@ enum SpeedCLI {
         do {
             var res = try SpeedJob.run(req, driveKey: before.key, driveName: before.name, control: control) { s in
                 if s.id % 4 == 0 {
-                    FileHandle.standardError.write(Data(String(format: "%@ %.0fs %.0f MB/s\n", s.phase.rawValue, s.t, s.mbps).utf8))
+                    let line = (s.cycle > 0 ? "cycle \(s.cycle) " : "") + String(format: "%@ %.0fs %.0f MB/s\n", s.phase.rawValue, s.t, s.mbps)
+                    FileHandle.standardError.write(Data(line.utf8))
                 }
             }
             poller.cancel()
