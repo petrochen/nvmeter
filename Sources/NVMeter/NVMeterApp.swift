@@ -87,7 +87,7 @@ struct NVMeterApp: App {
                 }
         }
         .defaultSize(width: 1100, height: 760)
-        .commands { ReportCommands() }
+        .commands { ReportCommands(); DriveCommands(monitor: monitor) }
         MenuBarExtra(isInserted: .constant(true)) {
             MenuPopover().environment(monitor)
         } label: {

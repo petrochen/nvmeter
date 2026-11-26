@@ -306,7 +306,7 @@ extension Monitor {
 
 import AppKit
 
-/// Local key handling for the main window: ⌘0 to ⌘9 select drives, holding ⌘ shows the numbers.
+/// Shows the ⌘ numbers next to drives while the Command key is held in the main window.
 @MainActor
 enum DriveShortcuts {
     private static var installed = false
@@ -314,26 +314,40 @@ enum DriveShortcuts {
     static func install(_ monitor: Monitor) {
         guard !installed else { return }
         installed = true
-        NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak monitor] event in
+        // ⌘0-⌘9 themselves are menu key equivalents (DriveCommands); this only shows the numbers while ⌘ is held.
+        NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged]) { [weak monitor] event in
             nonisolated(unsafe) let ev = event          // local monitors run on the main thread
-            let consumed = MainActor.assumeIsolated { () -> Bool in
-                guard let monitor else { return false }
+            MainActor.assumeIsolated {
+                guard let monitor else { return }
                 let mods = ev.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting([.capsLock, .numericPad, .function])
                 let inMain = ev.window.map { !($0 is NSPanel) && $0.styleMask.contains(.titled) } ?? false
-                if ev.type == .flagsChanged {
-                    let show = inMain && mods == .command
-                    if monitor.showShortcutBadges != show { monitor.showShortcutBadges = show }
-                    return false
-                }
-                guard inMain, mods == .command, let ch = ev.charactersIgnoringModifiers, ch.count == 1,
-                      let n = Int(ch), monitor.selectShortcut(n) else { return false }
-                monitor.showShortcutBadges = false
-                return true
+                let show = inMain && mods == .command
+                if monitor.showShortcutBadges != show { monitor.showShortcutBadges = show }
             }
-            return consumed ? nil : event
+            return event
         }
         NotificationCenter.default.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak monitor] _ in
             MainActor.assumeIsolated { monitor?.showShortcutBadges = false }
+        }
+    }
+}
+
+/// "Drives" menu: one item per drive with its ⌘0-⌘9 shortcut (⌘0 = the startup drive).
+struct DriveCommands: Commands {
+    let monitor: Monitor
+
+    var body: some Commands {
+        CommandMenu("Drives") {
+            let order = monitor.shortcutOrder
+            ForEach(Array(order.prefix(10).enumerated()), id: \.offset) { i, id in
+                if let d = monitor.drives.first(where: { $0.id == id }) {
+                    Button(d.displayName) {
+                        monitor.selectShortcut(i)
+                        AppRouter.showMain(driveID: id)
+                    }
+                    .keyboardShortcut(KeyEquivalent(Character(String(i))), modifiers: .command)
+                }
+            }
         }
     }
 }
