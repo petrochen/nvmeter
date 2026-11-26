@@ -2,7 +2,7 @@
 CONFIG ?= release
 APP    := build/NVMeter.app
 
-.PHONY: build app run dump icon shots release install-skill
+.PHONY: build app run dump icon shots release publish install-skill
 
 build:
 	swift build -c $(CONFIG)
@@ -69,3 +69,13 @@ release:
 	ditto -c -k --keepParent $(REL) $(ZIP)
 	shasum -a 256 $(ZIP)
 	@echo "Notarized $(ZIP)"
+
+# GitHub release from the notarized zip: tags v$(VERSION) (if needed), notes = that version's CHANGELOG section.
+publish:
+	test -f $(ZIP) || { echo "run make release first"; exit 1; }
+	xcrun stapler validate $(REL)
+	awk '/^## $(VERSION) /{f=1; next} /^## /{f=0} f' CHANGELOG.md > $(RELDIR)/notes.md
+	test -s $(RELDIR)/notes.md || { echo "no CHANGELOG section for $(VERSION)"; exit 1; }
+	printf '\nSHA-256 of NVMeter-$(VERSION).zip: `%s`\n' "$$(shasum -a 256 $(ZIP) | cut -d' ' -f1)" >> $(RELDIR)/notes.md
+	git rev-parse -q --verify refs/tags/v$(VERSION) >/dev/null || { git tag v$(VERSION) && git push origin v$(VERSION); }
+	gh release create v$(VERSION) $(ZIP) --title "NVMeter $(VERSION)" --notes-file $(RELDIR)/notes.md --verify-tag

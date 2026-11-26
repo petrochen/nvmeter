@@ -1,0 +1,46 @@
+name: Bug report
+description: Something shows wrong values, crashes or does not work.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please attach the dump below: most disk problems can only be understood with it.
+        `--hide-serials` masks serial numbers. Volume names stay in the dump; edit them out if they are private.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you saw. Screenshots help.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: NVMeter version
+      description: NVMeter > About NVMeter, or the release you downloaded.
+      placeholder: "0.10.0"
+    validations:
+      required: true
+  - type: input
+    id: mac
+    attributes:
+      label: Mac and macOS
+      placeholder: "MacBook Pro M4 Max, macOS 27.2"
+    validations:
+      required: true
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Drives and enclosures involved
+      description: Drive model, enclosure model, how it is connected (USB4, Thunderbolt 4/5, USB 10 Gb/s, dock, hub).
+      placeholder: "Samsung 970 EVO Plus in an OWC Express 4M2, USB4 cable straight to the Mac"
+  - type: textarea
+    id: dump
+    attributes:
+      label: Dump
+      description: |
+        Output of
+        `/Applications/NVMeter.app/Contents/MacOS/NVMeter --dump --hide-serials`
+        (paste it or attach the file).
+      render: json

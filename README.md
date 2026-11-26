@@ -1,5 +1,9 @@
 # NVMeter
 
+[![CI](https://github.com/petrochen/nvmeter/actions/workflows/ci.yml/badge.svg)](https://github.com/petrochen/nvmeter/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/petrochen/nvmeter)](https://github.com/petrochen/nvmeter/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 NVMeter watches the SSDs on your Mac and the enclosures they sit in. It was built for people who live off external
 drives: shoots that land on a four-bay enclosure, proxies on one stick, an archive on another, client media that
 should never be written to by accident.
@@ -341,6 +345,13 @@ first, and early when the drive reaches its own warning temperature), and rates 
 stale ones at the next launch. Last results per drive are kept in Application Support.
 CLI: `NVMeter --speedtest <mountpoint> --mode quick|sustained|random|live [--size GB|free10] [--seconds N] [--max-gb N]`
 prints JSON (`--seconds` is the time limit of a live loop, `--max-gb` its write limit).
+
+## Contributing
+
+Bug reports, hardware reports and pull requests are welcome, AI-assisted ones included. Start with
+[CONTRIBUTING.md](CONTRIBUTING.md); coding agents read [AGENTS.md](AGENTS.md). Questions and results go to
+[Discussions](https://github.com/petrochen/nvmeter/discussions), security problems to [SECURITY.md](SECURITY.md).
+Changes per version: [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
