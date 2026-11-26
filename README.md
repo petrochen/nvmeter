@@ -96,6 +96,29 @@ do until they are called with `confirm: true`, which the agent should send only 
 drive and system volumes are refused. Every call takes a fresh 1 s sample (about 1.1 s); history needs the app to have
 been running. Speed tests run from MCP are not added to the app's history.
 
+### Agent skill (Claude Code, Codex)
+
+`skills/nvmeter` is a skill for Claude Code and Codex: when to use NVMeter, recipes for the usual questions (health,
+slow copies, throttling, video work, warranty reports, protecting archives), how to read SMART and enclosure numbers
+(`references/reading-smart.md`) and the safety rules. `make install-skill` copies it to `~/.claude/skills` and
+`~/.codex/skills`. Codex MCP: `codex mcp add nvmeter -- ~/Applications/NVMeter.app/Contents/MacOS/NVMeter --mcp`.
+
+## Footprint
+
+Measured on an M-series Mac with six disks (five NVMe), 60 s each, `ps` CPU time and `top`:
+
+| State | CPU (one core) | Idle wake-ups / s | Memory |
+| --- | --- | --- | --- |
+| Menu bar only (window closed) | ~1 % | ~1 | ~80 MB |
+| Window open, Drives tab | ~5 % (SwiftUI redrawing the live charts) | ~5 | ~330 MB |
+| Sampling alone (`--record`) | ~0.7 % | - | ~20 MB |
+| `--mcp` server, idle | 0 % (blocked on input) | 0 | ~15 MB |
+
+Throughput counters are read every second (cheap), SMART every 5 s by default (Settings), volume lists only when
+DiskArbitration reports a change or once a minute. The window's content is not built while it is closed, minimised or
+fully covered, and the menu bar item is redrawn only when its text changes. Only one app instance runs; SMART reads of
+all NVMeter processes (app, MCP servers, CLI) take turns through a lock file.
+
 ## Build and run
 
 Requires Xcode 26+ command line tools (Swift 6 toolchain), macOS 14+.

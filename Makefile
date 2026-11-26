@@ -34,3 +34,9 @@ icon:
 shots: app
 	$(APP)/Contents/MacOS/NVMeter --screenshot build/shots --appearance light
 	$(APP)/Contents/MacOS/NVMeter --screenshot build/shots --appearance dark
+
+# Installs the agent skill for Claude Code and Codex (copies; re-run after editing skills/nvmeter).
+install-skill:
+	for d in $(HOME)/.claude/skills $(HOME)/.codex/skills; do \
+		mkdir -p $$d && rm -rf $$d/nvmeter && cp -R skills/nvmeter $$d/nvmeter; done
+	@echo "Installed skills/nvmeter into ~/.claude/skills and ~/.codex/skills"

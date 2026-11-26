@@ -43,8 +43,19 @@ final class SMARTReader: @unchecked Sendable {
 
     private init(service: RegEntry) { self.service = service }
 
+    /// One lock file shared by every NVMeter process (app, MCP servers, CLI): their SMART reads take turns instead
+    /// of failing with kIOReturnNoResources. Held only for the few milliseconds of one read.
+    private static let lockFD: Int32 = {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("NVMeter")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return Darwin.open(dir.appendingPathComponent("smart.lock").path, O_CREAT | O_RDWR | O_CLOEXEC, 0o644)
+    }()
+
     /// Opens the user client, runs `body`, closes it. Returns the IOReturn of the open on failure.
     private func withHandle<T>(_ body: (OpaquePointer) -> T) -> (T?, Int32) {
+        let fd = Self.lockFD
+        if fd >= 0 { flock(fd, LOCK_EX) }
+        defer { if fd >= 0 { flock(fd, LOCK_UN) } }
         var err: Int32 = 0
         guard let h = nvmeter_open(service.handle, &err) else { return (nil, err) }
         defer { nvmeter_close(h) }

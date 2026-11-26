@@ -1,6 +1,7 @@
 import Foundation
 import IOKit
 import DiskArbitration
+import os
 
 /// One physical disk found in the IORegistry. Everything here is read-only.
 final class DriveDevice: @unchecked Sendable {
@@ -56,6 +57,33 @@ final class DriveDevice: @unchecked Sendable {
 final class DriveScanner: @unchecked Sendable {
     private(set) var devices: [UInt64: DriveDevice] = [:]
     private let daSession = DASessionCreate(kCFAllocatorDefault)
+
+    /// Volume lists are re-read only after DiskArbitration reports a change (disk appeared / disappeared,
+    /// mounted, unmounted, renamed) or when `volumesDue` says so: reading them is the most expensive part of a tick
+    /// and wakes diskarbitrationd.
+    private let volumesDirty = OSAllocatedUnfairLock(initialState: true)
+    private let eventQueue = DispatchQueue(label: "nvmeter.da.events")
+    private var eventSession: DASession?
+
+    init() {
+        guard let s = DASessionCreate(kCFAllocatorDefault) else { return }
+        eventSession = s
+        let ctx = Unmanaged.passUnretained(self).toOpaque()
+        DARegisterDiskAppearedCallback(s, nil, { _, c in DriveScanner.markDirty(c) }, ctx)
+        DARegisterDiskDisappearedCallback(s, nil, { _, c in DriveScanner.markDirty(c) }, ctx)
+        DARegisterDiskDescriptionChangedCallback(s, nil, nil, { _, _, c in DriveScanner.markDirty(c) }, ctx)
+        DASessionSetDispatchQueue(s, eventQueue)
+    }
+
+    deinit { if let s = eventSession { DASessionSetDispatchQueue(s, nil) } }
+
+    private static func markDirty(_ ctx: UnsafeMutableRawPointer?) {
+        guard let ctx else { return }
+        Unmanaged<DriveScanner>.fromOpaque(ctx).takeUnretainedValue().volumesDirty.withLock { $0 = true }
+    }
+
+    /// True once after a DiskArbitration event.
+    func takeVolumesDirty() -> Bool { volumesDirty.withLock { let v = $0; $0 = false; return v } }
 
     /// Light scan: detects appearing / disappearing disks. Returns true when the set changed.
     @discardableResult
@@ -123,11 +151,11 @@ final class DriveScanner: @unchecked Sendable {
     }
 
     /// Re-reads link, enclosure and volume information (cheap, a few registry reads + DiskArbitration).
-    func refresh(_ d: DriveDevice) {
+    func refresh(_ d: DriveDevice, volumes withVolumes: Bool = true) {
         let ancestors = d.device.ancestors()
         d.link = Self.pcieLink(ancestors: ancestors)
         d.connection = Self.connection(for: d, ancestors: ancestors)
-        (d.volumes, d.unmounted) = volumes(for: d)
+        if withVolumes { (d.volumes, d.unmounted) = volumes(for: d) }
     }
 
     // MARK: PCIe link

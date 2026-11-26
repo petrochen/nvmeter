@@ -14,6 +14,9 @@ final class Monitor {
     var selection: String?
     var tab: AppTab = .drives
     var lastTick = Date()
+    /// What the menu bar item shows. Stored and only assigned on change, so the status item is not redrawn every
+    /// second just because throughput (part of `drives`) changed.
+    private(set) var menuBarIcon = MenuBarState(text: "–", status: .unknown)
     /// Set after a mount / unmount so the next tick re-reads volumes instead of waiting for the SMART interval.
     @ObservationIgnored var forceRefresh = false
     let speedRunner = SpeedTestRunner()
@@ -81,6 +84,8 @@ final class Monitor {
         var snaps = snaps
         for i in snaps.indices { snaps[i].customName = names[snaps[i].id] }
         if snaps != drives { drives = snaps }
+        let icon = MenuBarState(text: menuBarText, status: hottest?.status ?? .unknown)
+        if icon != menuBarIcon { menuBarIcon = icon }
         alerts.evaluate(snaps, now: now)
         ExtraAlerts.shared.evaluate(snaps, raidSets: raidSets, center: alerts)
         ConnectCheck.shared.evaluate(snaps, now: now)
@@ -136,7 +141,16 @@ final class Monitor {
     func temps(_ id: String, window: TimeInterval) -> [TempPoint] {
         if window > Self.memoryWindow { return tempSeries(id, window: window) }
         let from = lastTick.addingTimeInterval(-window)
-        return (tempHistory[id] ?? []).filter { $0.t >= from }
+        return Self.decimate((tempHistory[id] ?? []).filter { $0.t >= from })
+    }
+
+    /// Keeps the hottest reading per bucket so a peak never disappears from a decimated chart.
+    static func decimate(_ pts: [TempPoint], maxCount: Int = 180) -> [TempPoint] {
+        guard pts.count > maxCount else { return pts }
+        let stride = Int((Double(pts.count) / Double(maxCount)).rounded(.up))
+        return Swift.stride(from: 0, to: pts.count, by: stride).map { i in
+            pts[i..<min(i + stride, pts.count)].max { $0.c < $1.c }!
+        }
     }
 
     func rates(_ id: String, window: TimeInterval) -> [RatePoint] {
@@ -218,7 +232,7 @@ final class Monitor {
     }
 
     /// Averages into buckets so a 2 h window stays cheap to draw.
-    static func decimate(_ pts: [RatePoint], maxCount: Int = 360) -> [RatePoint] {
+    static func decimate(_ pts: [RatePoint], maxCount: Int = 240) -> [RatePoint] {
         guard pts.count > maxCount else { return pts }
         let stride = Int((Double(pts.count) / Double(maxCount)).rounded(.up))
         return Swift.stride(from: 0, to: pts.count, by: stride).map { i in

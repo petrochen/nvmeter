@@ -8,6 +8,7 @@ final class Sampler: @unchecked Sendable {
     private var smart: [UInt64: SMARTSnapshot] = [:]
     private var smartErrors: [UInt64: String] = [:]
     private var lastFull: TimeInterval = -.infinity
+    private var lastVolumes: TimeInterval = -.infinity
     let extras = SamplerExtras()
 
     /// Seconds between SMART / link / volume refreshes.
@@ -21,6 +22,10 @@ final class Sampler: @unchecked Sendable {
         let changed = scanner.scan()
         let doFull = full || changed || now - lastFull >= smartInterval
         if doFull { lastFull = now }
+        // Volumes: on DiskArbitration events, on an explicit full tick, else every minute (free space).
+        let dirty = scanner.takeVolumesDirty()
+        let volumesDue = full || dirty || now - lastVolumes >= 60
+        if volumesDue { lastVolumes = now }
         lastTickRefreshed = doFull
 
         for d in scanner.devices.values {
@@ -36,7 +41,7 @@ final class Sampler: @unchecked Sendable {
                 prev[d.key] = (c, now)
             }
             if doFull {
-                if !changed { scanner.refresh(d) }
+                if !changed { scanner.refresh(d, volumes: volumesDue) }
                 if let r = d.reader {
                     var s = r.readSMART()
                     if s == nil { s = r.readSMART() }          // one immediate retry
@@ -46,6 +51,8 @@ final class Sampler: @unchecked Sendable {
                         lastFull = now - smartInterval + 1      // try again in about a second
                     }
                 }
+            } else if volumesDue && !changed {
+                scanner.refresh(d, volumes: true)
             }
         }
         for k in prev.keys where scanner.devices[k] == nil { prev[k] = nil; rates[k] = nil; smart[k] = nil; smartErrors[k] = nil }

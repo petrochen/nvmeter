@@ -43,8 +43,7 @@ struct MenuBarLabel: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        let h = monitor.hottest
-        Image(nsImage: MenuBarIcon.image(text: monitor.menuBarText, status: h?.status ?? .unknown))
+        Image(nsImage: MenuBarIcon.image(text: monitor.menuBarIcon.text, status: monitor.menuBarIcon.status))
             .task { monitor.start() }
             .onReceive(NotificationCenter.default.publisher(for: .nvmeterShowMain)) { n in
                 if let id = n.userInfo?["driveID"] as? String { monitor.selection = id; monitor.tab = .drives }

@@ -23,7 +23,8 @@ final class AppLifecycle {
         guard !installed else { return }
         installed = true
         let names: [Notification.Name] = [NSWindow.didBecomeKeyNotification, NSWindow.didBecomeMainNotification, NSWindow.willCloseNotification,
-                                          NSWindow.didMiniaturizeNotification, NSWindow.didDeminiaturizeNotification]
+                                          NSWindow.didMiniaturizeNotification, NSWindow.didDeminiaturizeNotification,
+                                          NSWindow.didChangeOcclusionStateNotification]
         for n in names {
             NotificationCenter.default.addObserver(forName: n, object: nil, queue: .main) { [weak self] _ in
                 Task { @MainActor in
@@ -44,6 +45,10 @@ final class AppLifecycle {
     }
 
     func update() {
+        let visible = NSApp.windows.contains { w in
+            !(w is NSPanel) && w.styleMask.contains(.titled) && w.isVisible && !w.isMiniaturized && w.occlusionState.contains(.visible)
+        }
+        if WindowState.shared.mainVisible != visible { WindowState.shared.mainVisible = visible }
         let hide = UserDefaults.standard.bool(forKey: AlertKeys.hideDock)
         let want: NSApplication.ActivationPolicy = (hide || !hasRegularWindow) ? .accessory : .regular
         guard NSApp.activationPolicy() != want else { return }
